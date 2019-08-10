@@ -1,15 +1,10 @@
 package com.clearevo.libecodroidbluetooth;
-
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothSocket;
 import android.content.Context;
 import android.os.ParcelUuid;
 import android.util.Log;
-
-import com.clearevo.libecodroidbluetooth.inputstream_to_queue_reader_thread;
-import com.clearevo.libecodroidbluetooth.queue_to_outputstream_writer_thread;
-import com.clearevo.libecodroidbluetooth.rfcomm_to_tcp_callbacks;
 
 import java.io.Closeable;
 import java.io.InputStream;
@@ -22,9 +17,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-/**
- * Created by kasidit on 4/26/18.
- */
 
 public class rfcomm_conn_mgr {
 
@@ -35,17 +27,17 @@ public class rfcomm_conn_mgr {
     List<Closeable> m_cleanup_closables;
     Thread m_conn_state_watcher;
 
-    rfcomm_to_tcp_callbacks m_rfcomm_to_tcp_callbacks;
+    rfcomm_conn_callbacks m_rfcomm_to_tcp_callbacks;
 
     ConcurrentLinkedQueue<byte[]> m_incoming_buffers;
     ConcurrentLinkedQueue<byte[]> m_outgoing_buffers;
-    Context m_context;
 
     final int BTINCOMING_QUEUE_MAX_LEN = 100;
     static final String TAG = "edg_rfcmtcp";
 
     String m_tcp_server_host;
     int m_tcp_server_port;
+    boolean m_readline_callback_mode = false;
 
     volatile boolean closed = false;
 
@@ -98,13 +90,25 @@ public class rfcomm_conn_mgr {
     }
 
 
-    public rfcomm_conn_mgr(BluetoothDevice target_bt_server_dev, final String tcp_server_host, final int tcp_server_port, rfcomm_to_tcp_callbacks cb, Context context) throws Exception {
+    //use this ctor for readline callback mode
+    public rfcomm_conn_mgr(BluetoothDevice target_bt_server_dev, rfcomm_conn_callbacks cb) throws Exception {
+        m_readline_callback_mode = true;
+        init(target_bt_server_dev, null, 0, cb);
+    }
 
+    //use this ctor and specify tcp_server_host, tcp_server_port for connect-and-stream-data-to-your-tcp-server mode
+    public rfcomm_conn_mgr(BluetoothDevice target_bt_server_dev, final String tcp_server_host, final int tcp_server_port, rfcomm_conn_callbacks cb) throws Exception {
+        init(target_bt_server_dev, tcp_server_host, tcp_server_port, cb);
+    }
+
+    private void init(BluetoothDevice target_bt_server_dev, final String tcp_server_host, final int tcp_server_port, rfcomm_conn_callbacks cb) throws Exception
+    {
         m_rfcomm_to_tcp_callbacks = cb;
 
-        if (target_bt_server_dev == null) {
-            Log.d(TAG, "tcp_server_host null so not conencting to tcp server mode...");
+        if (tcp_server_host == null) {
+            Log.d(TAG, "tcp_server_host null so disabled conencting to tcp server mode...");
         }
+
         m_target_bt_server_dev = target_bt_server_dev;
 
         m_tcp_server_host = tcp_server_host;
@@ -114,8 +118,11 @@ public class rfcomm_conn_mgr {
         m_incoming_buffers = new ConcurrentLinkedQueue<byte[]>();
         m_outgoing_buffers = new ConcurrentLinkedQueue<byte[]>();
 
-        m_context = context;
+        if (m_target_bt_server_dev == null)
+            throw new Exception("m_target_bt_server_dev not specified");
 
+        if (m_rfcomm_to_tcp_callbacks == null)
+            throw new Exception("m_rfcomm_to_tcp_callbacks not specified");
     }
 
 
@@ -144,7 +151,7 @@ public class rfcomm_conn_mgr {
             Log.d(TAG, "calling m_bs.connect() done m_target_bt_server_dev: name: "+m_target_bt_server_dev.getName() +" bdaddr: "+m_target_bt_server_dev.getAddress());
 
             if (m_rfcomm_to_tcp_callbacks != null)
-                m_rfcomm_to_tcp_callbacks.on_bt_connected();
+                m_rfcomm_to_tcp_callbacks.on_rfcomm_connected();
 
             InputStream bs_is = m_bs.getInputStream();
             OutputStream bs_os = m_bs.getOutputStream();
@@ -220,7 +227,7 @@ public class rfcomm_conn_mgr {
 
                             if (sock_is_reader_thread != null && sock_is_reader_thread.isAlive() == false) {
                                 if (m_rfcomm_to_tcp_callbacks != null)
-                                    m_rfcomm_to_tcp_callbacks.on_bt_disconnected();
+                                    m_rfcomm_to_tcp_callbacks.on_rfcomm_disconnected();
                                 throw new Exception("sock_is_reader_thread died");
                             }
 

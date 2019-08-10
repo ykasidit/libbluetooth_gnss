@@ -1,13 +1,10 @@
 package com.clearevo.libecodroidbluetooth;
-
 import android.util.Log;
 
 import java.io.Closeable;
 import java.io.OutputStream;
 import java.util.concurrent.ConcurrentLinkedQueue;
-/**
- * Created by kasidit on 4/26/18.
- */
+
 
 public class queue_to_outputstream_writer_thread extends Thread implements Closeable {
 
