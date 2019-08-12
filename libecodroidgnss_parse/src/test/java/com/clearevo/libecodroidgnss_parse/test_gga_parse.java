@@ -1,5 +1,11 @@
 package com.clearevo.libecodroidgnss_parse;
 
+import net.sf.marineapi.nmea.parser.SentenceFactory;
+import net.sf.marineapi.nmea.sentence.GGASentence;
+import net.sf.marineapi.nmea.sentence.MWVSentence;
+import net.sf.marineapi.nmea.sentence.TalkerId;
+import net.sf.marineapi.nmea.util.Position;
+
 import org.junit.Test;
 
 import java.util.HashMap;
@@ -15,8 +21,18 @@ public class test_gga_parse {
 
     @Test
     public void test() {
+
+        SentenceFactory sf = SentenceFactory.getInstance();
+        GGASentence gga = (GGASentence) sf.createParser(TalkerId.GN, "GGA");
+        Position position = new Position(0.1, -0.2, 0.3);
+        gga.setPosition(position);
+
+        String example_nmea_gga = gga.toSentence();
+        System.out.println("gga sentence: "+example_nmea_gga);
+
         String[] nmeas = {
-                "$GNGGA,095519.00,2733.35606,S,15302.15700,E,1,12,0.70,46.6,M,38.3,M,,*63",
+                example_nmea_gga,
+                "$GAGSV,2,1,07,02,28,068,28,07,04,307,21,13,16,327,29,15,68,339,,0*73\n",
                 "�b\u00010\u0004\u0001�e�\u0011\u0015\u0004\u0000\u0000\n" +
                         "\u0002\n" +
                         "\u0007\"\u001FZ\u0001W���\u0003\u0006\n" +
@@ -50,9 +66,9 @@ public class test_gga_parse {
             System.out.println("param key: "+key+" val: "+params.get(key));
         }
 
-        assertTrue(params.containsKey("sentence_id_GGA"));
-        assertTrue(params.containsKey("sentence_id_RMC"));
-        assertTrue(params.get("lat").toString().startsWith("-27.555934333333333"));
-        assertTrue(params.get("lon").toString().startsWith("153.03595"));
+        assertTrue(params.containsKey("GN_sentence_id_GGA"));
+        assertTrue(params.containsKey("GN_sentence_id_RMC"));
+        assertTrue(params.get("GN_lat").toString().startsWith("0.1"));
+        assertTrue(params.get("GN_lon").toString().startsWith("-0.2"));
     }
 }
