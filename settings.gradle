@@ -1,1 +1,1 @@
-include ':app', ':libecodroidbluetooth'
+include ':app', ':libecodroidbluetooth', ':libecodroidgnss_parse'
