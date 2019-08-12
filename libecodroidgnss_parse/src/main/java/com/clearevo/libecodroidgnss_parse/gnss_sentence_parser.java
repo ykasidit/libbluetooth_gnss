@@ -10,6 +10,7 @@ import net.sf.marineapi.nmea.sentence.GGASentence;
 import net.sf.marineapi.nmea.sentence.GSASentence;
 import net.sf.marineapi.nmea.sentence.RMCSentence;
 import net.sf.marineapi.nmea.sentence.Sentence;
+import net.sf.marineapi.nmea.sentence.TalkerId;
 import net.sf.marineapi.nmea.util.Position;
 
 import java.io.BufferedInputStream;
@@ -27,11 +28,11 @@ public class gnss_sentence_parser {
 
     final String TAG = "btgnss_nmea_p";
     final String[] KNOWN_NMEA_PREFIX_LIST = {
-            "$GN", //combined
-            "$GP", //GPS
-            "$GL", //GLONASS
-            "$GA", //Galileo
-            "$BD", //BeiDou
+            "$"+ TalkerId.GN, //combined
+            "$"+ TalkerId.GP, //GPS
+            "$"+ TalkerId.GL, //GLONASS
+            "$"+ TalkerId.GA, //Galileo
+            "$"+ TalkerId.BD, //BeiDou
     };
     nmea_parser_callbacks m_cb;
     SentenceFactory m_sf = SentenceFactory.getInstance();
