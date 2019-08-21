@@ -11,7 +11,7 @@ public class queue_to_outputstream_writer_thread extends Thread implements Close
     ConcurrentLinkedQueue<byte[]> m_queue;
     OutputStream m_os;
 
-    final String TAG = "edg_qtowt";
+    final String TAG = "btgnss_qtowt";
 
     public queue_to_outputstream_writer_thread(ConcurrentLinkedQueue<byte[]> queue, OutputStream os)
     {

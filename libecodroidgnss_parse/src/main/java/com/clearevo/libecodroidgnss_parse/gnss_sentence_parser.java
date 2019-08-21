@@ -1,25 +1,15 @@
 package com.clearevo.libecodroidgnss_parse;
 
-import android.content.Context;
-import android.content.Intent;
 import android.util.Log;
 
 import net.sf.marineapi.nmea.parser.DataNotAvailableException;
 import net.sf.marineapi.nmea.parser.SentenceFactory;
 import net.sf.marineapi.nmea.sentence.GGASentence;
-import net.sf.marineapi.nmea.sentence.GSASentence;
 import net.sf.marineapi.nmea.sentence.RMCSentence;
 import net.sf.marineapi.nmea.sentence.Sentence;
 import net.sf.marineapi.nmea.sentence.TalkerId;
 import net.sf.marineapi.nmea.util.Position;
 
-import java.io.BufferedInputStream;
-import java.io.BufferedReader;
-import java.io.DataInputStream;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
-import java.util.Date;
 import java.util.HashMap;
 
 
@@ -34,12 +24,16 @@ public class gnss_sentence_parser {
             "$"+ TalkerId.GA, //Galileo
             "$"+ TalkerId.BD, //BeiDou
     };
-    nmea_parser_callbacks m_cb;
+    gnss_parser_callbacks m_cb;
     SentenceFactory m_sf = SentenceFactory.getInstance();
     HashMap<String, Object> m_parsed_params_hashmap = new HashMap<String, Object>();
 
+    public gnss_parser_callbacks get_callback() {
+        return m_cb;
+    }
 
-    boolean parse(String read_line) {
+    //returns valid parsed nmea or null if parse failed
+    public String parse(String read_line) {
         String nmea = read_line;
 
         boolean found_and_filt_to_prefix = false;
@@ -59,20 +53,21 @@ public class gnss_sentence_parser {
         }
 
         if (!found_and_filt_to_prefix) {
-            return false;
+            return null;
         }
 
         //try parse this nmea and update our states
-        boolean sentence_valid = false;
+        String ret = null;
         try {
 
             Sentence sentence =  m_sf.createParser(nmea);
-            sentence_valid = true;
+            ret = nmea; // if control reaches here means that this nmea string is valid
             String sentence_id = sentence.getSentenceId();
-            String param_key = "sentence_id_"+sentence_id;
-            String talker_id = sentence.getTalkerId().name(); //sepcifies talker_id like GN for combined, GA for Galileo, GP for GPS
 
-            put_param(talker_id, param_key, sentence_id); //talter-to-sentence param
+            //sentence type counter
+            String param_key = sentence_id+"_count";
+            String talker_id = sentence.getTalkerId().name(); //sepcifies talker_id like GN for combined, GA for Galileo, GP for GPS
+            inc_param(talker_id, param_key); //talter-to-sentence param
 
             /////////////////////// parse and put main params in hashmap
 
@@ -119,24 +114,29 @@ public class gnss_sentence_parser {
                 try {
                     put_param(talker_id,"status", rmc.getStatus());
                 } catch (DataNotAvailableException dae) {}
+
+                //update on RMC
+                if (m_cb != null) {
+                    m_cb.on_updated_nmea_params(m_parsed_params_hashmap);
+                }
             }
 
         } catch (Exception e) {
             Log.d(TAG, "parse/update nmea params/callbacks exception: "+Log.getStackTraceString(e));
         }
 
-        return sentence_valid;
+        return ret;
     }
 
 
     // put into m_parsed_params_hashmap directly if is int/long/double/string else conv to string then put... also ass its <param>_ts timestamp
-    public void put_param(String talker_id, String param_key, Object val)
+    public void put_param(String talker_id, String param_name, Object val)
     {
         if (val == null) {
             return; //not supported
         }
 
-        String key = ""+talker_id+"_"+param_key;
+        String key = ""+talker_id+"_"+param_name;
 
         if (val instanceof Double || val instanceof Integer || val instanceof Long || val instanceof String) {
             m_parsed_params_hashmap.put(key, val);
@@ -146,6 +146,24 @@ public class gnss_sentence_parser {
 
         m_parsed_params_hashmap.put(key+"_ts", System.currentTimeMillis());
     }
+
+    //for counters
+    public void inc_param(String talker_id, String param_name)
+    {
+        String key = ""+talker_id+"_"+param_name;
+        int cur_counter = 0;
+        if (m_parsed_params_hashmap.containsKey(param_name)) {
+            try {
+                cur_counter = (int) m_parsed_params_hashmap.get(key);
+            } catch (Exception e) {
+                //in case same param key was somehow not an int...
+                Log.d(TAG, "WARNING: inc_param prev value for key was likely not an integer - using 0 counter start instead - exception: "+Log.getStackTraceString(e));
+            }
+        }
+        cur_counter++;
+        put_param(talker_id, param_name, cur_counter);
+    }
+
 
 
     public HashMap<String, Object> get_params()
@@ -161,12 +179,13 @@ public class gnss_sentence_parser {
     }
 
 
-    public interface nmea_parser_callbacks {
+    public interface gnss_parser_callbacks {
         public void on_updated_nmea_params(HashMap<String, Object> params_map);
     }
 
 
-    void set_callbacks(nmea_parser_callbacks cb){
+    public void set_callback(gnss_parser_callbacks cb){
+        Log.d(TAG, "set_callback() "+cb);
         m_cb = cb;
     }
 

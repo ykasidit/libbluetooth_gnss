@@ -33,7 +33,7 @@ public class rfcomm_conn_mgr {
     ConcurrentLinkedQueue<byte[]> m_outgoing_buffers;
 
     final int BTINCOMING_QUEUE_MAX_LEN = 100;
-    static final String TAG = "edg_rfcmtcp";
+    static final String TAG = "btgnss_rfcmgr";
 
     String m_tcp_server_host;
     int m_tcp_server_port;
@@ -123,6 +123,8 @@ public class rfcomm_conn_mgr {
 
         if (m_rfcomm_to_tcp_callbacks == null)
             throw new Exception("m_rfcomm_to_tcp_callbacks not specified");
+
+        Log.d(TAG, "init() done m_readline_callback_mode: "+m_readline_callback_mode);
     }
 
 
@@ -145,7 +147,7 @@ public class rfcomm_conn_mgr {
                 throw new Exception("Failed to find SPP uuid in target bluetooth device - ABORT");
             }
 
-            m_bs = m_target_bt_server_dev.createRfcommSocketToServiceRecord(found_spp_uuid);
+            m_bs = m_target_bt_server_dev.createInsecureRfcommSocketToServiceRecord(found_spp_uuid);
             Log.d(TAG, "calling m_bs.connect() start m_target_bt_server_dev: name: "+m_target_bt_server_dev.getName() +" bdaddr: "+m_target_bt_server_dev.getAddress());
             m_bs.connect();
             Log.d(TAG, "calling m_bs.connect() done m_target_bt_server_dev: name: "+m_target_bt_server_dev.getName() +" bdaddr: "+m_target_bt_server_dev.getAddress());
@@ -160,7 +162,12 @@ public class rfcomm_conn_mgr {
             m_cleanup_closables.add(bs_os);
 
             //start thread to read from bluetooth socket to incoming_buffer
-            inputstream_to_queue_reader_thread incoming_thread = new inputstream_to_queue_reader_thread(bs_is, m_incoming_buffers);
+            inputstream_to_queue_reader_thread incoming_thread = null;
+            if (m_readline_callback_mode) {
+                incoming_thread = new inputstream_to_queue_reader_thread(bs_is, m_rfcomm_to_tcp_callbacks);
+            } else {
+                incoming_thread = new inputstream_to_queue_reader_thread(bs_is, m_incoming_buffers);
+            }
             m_cleanup_closables.add(incoming_thread);
             incoming_thread.start();
 

@@ -66,8 +66,10 @@ public class test_gga_parse {
             System.out.println("param key: "+key+" val: "+params.get(key));
         }
 
-        assertTrue(params.containsKey("GN_sentence_id_GGA"));
-        assertTrue(params.containsKey("GN_sentence_id_RMC"));
+        assertTrue(1 == (int) params.get("GN_GGA_count"));
+        assertTrue(1 == (int) params.get("GN_RMC_count"));
+        assertTrue(1 == (int) params.get("GA_GSV_count"));
+
         assertTrue(params.get("GN_lat").toString().startsWith("0.1"));
         assertTrue(params.get("GN_lon").toString().startsWith("-0.2"));
     }

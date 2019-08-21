@@ -16,7 +16,7 @@ public class inputstream_to_queue_reader_thread extends Thread implements Closea
     InputStream m_is;
     ConcurrentLinkedQueue<byte[]> m_queue;
 
-    final String TAG = "edg_istqrt";
+    final String TAG = "btgnss_istqrt";
     final int READ_BUF_SIZE = 2048;
     readline_callbacks m_readline_cb;
     BufferedReader m_buffered_reader;
