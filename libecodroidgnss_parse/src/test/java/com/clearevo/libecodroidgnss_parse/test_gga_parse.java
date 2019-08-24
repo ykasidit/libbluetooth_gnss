@@ -33,6 +33,7 @@ public class test_gga_parse {
         String[] nmeas = {
                 example_nmea_gga,
                 "$GAGSV,2,1,07,02,28,068,28,07,04,307,21,13,16,327,29,15,68,339,,0*73\n",
+                "$GAGSV,2,1,07,02,28,068,28,07,04,307,21,13,16,327,29,15,68,339,,0*73\n",
                 "�b\u00010\u0004\u0001�e�\u0011\u0015\u0004\u0000\u0000\n" +
                         "\u0002\n" +
                         "\u0007\"\u001FZ\u0001W���\u0003\u0006\n" +
@@ -68,7 +69,7 @@ public class test_gga_parse {
 
         assertTrue(1 == (int) params.get("GN_GGA_count"));
         assertTrue(1 == (int) params.get("GN_RMC_count"));
-        assertTrue(1 == (int) params.get("GA_GSV_count"));
+        assertTrue(2 == (int) params.get("GA_GSV_count"));
 
         assertTrue(params.get("GN_lat").toString().startsWith("0.1"));
         assertTrue(params.get("GN_lon").toString().startsWith("-0.2"));

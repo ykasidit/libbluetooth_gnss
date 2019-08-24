@@ -26,15 +26,17 @@ import com.clearevo.libecodroidbluetooth.rfcomm_conn_callbacks;
 import com.clearevo.libecodroidbluetooth.rfcomm_conn_mgr;
 import com.clearevo.libecodroidgnss_parse.gnss_sentence_parser;
 
+import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 
 
-public class bluetooth_gnss_service extends Service implements rfcomm_conn_callbacks {
+public class bluetooth_gnss_service extends Service implements rfcomm_conn_callbacks, gnss_sentence_parser.gnss_parser_callbacks {
 
     static final String TAG = "btgnss_service";
 
     rfcomm_conn_mgr g_rfcomm_mgr = null;
-    public gnss_sentence_parser m_gnss_parser = new gnss_sentence_parser();
+    private gnss_sentence_parser m_gnss_parser = new gnss_sentence_parser();
 
     final String EDG_DEVICE_PREFIX = "EcoDroidGPS";
     public static final String BROADCAST_ACTION_NMEA = "com.clearevo.bluetooth_gnss.NMEA";
@@ -106,10 +108,6 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
 
         try {
 
-            //new instance to clear state but hook to old callback if exists
-            gnss_sentence_parser.gnss_parser_callbacks old_cb = m_gnss_parser.get_callback();
-            m_gnss_parser = new gnss_sentence_parser(); //use new instance
-            m_gnss_parser.set_callback(old_cb);
 
             if (is_conn_thread_alive()) {
                 toast("connection already ongoing - please wait...");
@@ -118,6 +116,10 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
                 toast("already connected - press Back to disconnect and exit...");
                 return 2;
             } else {
+
+                m_gnss_parser = new gnss_sentence_parser(); //use new instance
+                m_gnss_parser.set_callback(this);
+
                 toast("connecting to: "+bdaddr);
                 if (g_rfcomm_mgr != null) {
                     g_rfcomm_mgr.close();
@@ -212,10 +214,10 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
 
     public void on_readline(String readline)
     {
-        Log.d(TAG, "on_readline()");
+        //Log.d(TAG, "on_readline()");
         String parsed_nmea = m_gnss_parser.parse(readline);
 
-        if (parsed_nmea != null) {
+        if (false && parsed_nmea != null) {
             Intent intent = new Intent();
             intent.setAction(BROADCAST_ACTION_NMEA);
             intent.putExtra("NMEA", parsed_nmea);
@@ -302,6 +304,11 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
     }
 
     private void updateNotification(String title, String text, String ticker) {
+
+        if (ticker == null || ticker.length() == 0) {
+            ticker = new Date().toString();
+        }
+
         Notification notification = getMyActivityNotification(title, text, ticker);
 
         NotificationManager mNotificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
@@ -330,8 +337,6 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
         return gps_enabled;
 
     }
-
-    public static final String MOCK_LOCATION_PROVIDER_NAME = "com.clearevo.bluetooth_gnss.MOCK_LOCATION_PROVIDER";
 
     public static boolean is_mock_location_enabled(Context context, int app_uid, String app_id_string)
     {
@@ -391,6 +396,29 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
 
     // Binder given to clients
     private final IBinder m_binder = new LocalBinder();
+
+    long last_set_mock_location_ts = 0;
+    @Override
+    public void on_updated_nmea_params(HashMap<String, Object> params_map) {
+
+        //try set_mock
+        try {
+            if (params_map.containsKey("GN_lat_ts")) {
+                long new_ts = (long) params_map.get("GN_lat_ts");
+                if (new_ts != last_set_mock_location_ts) {
+                    double lat, lon, alt;
+                    lat = (double) params_map.get("GN_lat");
+                    lon = (double) params_map.get("GN_lon");
+                    alt = (double) params_map.get("GN_alt");
+                    setMock(lat, lon, alt, (float)  0.57);
+                } else {
+                    //omit as same ts as last
+                }
+            }
+        } catch (Exception e) {
+            Log.d(TAG, "bluetooth_gnss_service on_updated_nmea_params exception: "+Log.getStackTraceString(e));
+        }
+    }
 
     /**
      * Class used for the client Binder.  Because we know this service always

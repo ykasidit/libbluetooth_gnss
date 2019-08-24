@@ -86,6 +86,19 @@ public class gnss_sentence_parser {
                 } catch (DataNotAvailableException dae) {}
 
                 try {
+                    put_param(talker_id,"hdop", gga.getHorizontalDOP());
+                } catch (DataNotAvailableException dae) {}
+
+                try {
+                    put_param(talker_id,"dgps_age", gga.getDgpsAge());
+                    put_param(talker_id,"dgps_station_id", gga.getDgpsStationId());
+                } catch (DataNotAvailableException dae) {}
+
+                try {
+                    put_param(talker_id,"fix_quality", gga.getFixQuality().toString());
+                } catch (DataNotAvailableException dae) {}
+
+                try {
                     put_param(talker_id,"datum", pos.getDatum());
                 } catch (DataNotAvailableException dae) {}
 
@@ -133,6 +146,7 @@ public class gnss_sentence_parser {
     public void put_param(String talker_id, String param_name, Object val)
     {
         if (val == null) {
+            //Log.d(TAG, "put_param null so omit");
             return; //not supported
         }
 
@@ -151,15 +165,20 @@ public class gnss_sentence_parser {
     public void inc_param(String talker_id, String param_name)
     {
         String key = ""+talker_id+"_"+param_name;
+        //Log.d(TAG, "inc_param: "+key);
         int cur_counter = 0;
-        if (m_parsed_params_hashmap.containsKey(param_name)) {
+        if (m_parsed_params_hashmap.containsKey(key)) {
+            //Log.d(TAG, "inc_param: "+param_name+" exists");
             try {
                 cur_counter = (int) m_parsed_params_hashmap.get(key);
             } catch (Exception e) {
                 //in case same param key was somehow not an int...
                 Log.d(TAG, "WARNING: inc_param prev value for key was likely not an integer - using 0 counter start instead - exception: "+Log.getStackTraceString(e));
             }
+        } else {
+            //Log.d(TAG, "inc_param: "+param_name+" not exists");
         }
+
         cur_counter++;
         put_param(talker_id, param_name, cur_counter);
     }
