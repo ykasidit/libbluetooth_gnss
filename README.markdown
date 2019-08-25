@@ -5,7 +5,7 @@ libbluetooth_gnss
 About
 -----
 
-This android-studio project repo contains a few main android library 'modules' used by the 'Bluetooth GNSS' App which allows Android phones to connect and read GNSS (GPS/GLONASS/Galileo/BeiDou) position data from existing Bluetooth GNSS Receivers like the [EcoDroidGPS Bluetooth GPS Receiver](https://www.clearevo.com/ecodroidgps) - which is the main target device and developed by the same author of this project, HOLUX Bluetooth GPS devices, the Garmin GLO, etc.
+This android-studio project repo contains a few main android library 'modules' which allows Android phones to connect and read/parse GNSS (GPS/GLONASS/Galileo/BeiDou) position data from existing Bluetooth GNSS Receivers like the [EcoDroidGPS Bluetooth GPS Receiver](https://www.clearevo.com/ecodroidgps) - which is the main target device and developed by the same author of this project and also others similar 'nmea-like-messages over RFCOMM' devices like the HOLUX Bluetooth GPS devices, the Garmin GLO, etc.
 
 The main modules are listed below:
 
@@ -16,11 +16,26 @@ The main modules are listed below:
   - Parses nmea-like or other format data streamed from supported GNSS Receiver devices.
   - This module project uses the 'Java Marine API' - Full credit and thanks to its author 'Kimmo Tuukkanen' - please refer to its copyright and license info at: https://github.com/ktuukkan/marine-api
 
+- libbluetooth_gnss_service
+  - Android Service (forground) that uses both above and perform the main function of this project.
+
+
+Special thanks
+--------------
+
+- Special thanks to 'Geoffrey Peck' from Australia for all his tests, observations and suggestions on Galileo support for the 'EcoDroidGPS GNSS Receiver' which led to this project, and also providing example sentence logs where RMC sentence lines got mixed with UBX messages - this is used in the unit-tests of this project to handle and still make use of lines that got binary messages mixed into the start of the same line.
+
+
+Authors
+-------
+
+Kasidit Yusuf <ykasidit@gmail.com>
+
 
 Copyright and License
 ---------------------
 
-Copyright (C) 2019  Kasidit Yusuf <ykasidit@gmail.com>
+Copyright (C) 2019 Kasidit Yusuf <ykasidit@gmail.com>
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -35,14 +50,3 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-
-Authors
--------
-
-Kasidit Yusuf <ykasidit@gmail.com>
-
-
-Special thanks
---------------
-
-- Special thanks to 'Geoffrey Peck' from Australia for all his tests, observations and suggestions on Galileo support for the 'EcoDroidGPS GNSS Receiver' which led to this project, and also providing example sentence logs where RMC sentence lines got mixed with UBX messages - this is used in the unit-tests of this project to handle and still make use of lines that got binary messages mixed into the start of the same line.
