@@ -1,5 +1,7 @@
 package com.clearevo.libecodroidgnss_parse;
 
+import android.os.SystemClock;
+
 import net.sf.marineapi.nmea.parser.SentenceFactory;
 import net.sf.marineapi.nmea.sentence.GGASentence;
 import net.sf.marineapi.nmea.sentence.MWVSentence;
@@ -32,6 +34,8 @@ public class test_gga_parse {
 
         String[] nmeas = {
                 example_nmea_gga,
+                "$GNGSA,A,3,15,17,28,06,13,02,12,24,30,,,,1.30,0.71,1.10,1*0D\n",
+                "$GNGSA,A,3,02,27,30,13,,,,,,,,,1.30,0.71,1.10,3*01\n",
                 "$GAGSV,2,1,07,02,28,068,28,07,04,307,21,13,16,327,29,15,68,339,,0*73\n",
                 "$GAGSV,2,1,07,02,28,068,28,07,04,307,21,13,16,327,29,15,68,339,,0*73\n",
                 "�b\u00010\u0004\u0001�e�\u0011\u0015\u0004\u0000\u0000\n" +
@@ -70,6 +74,9 @@ public class test_gga_parse {
         assertTrue(1 == (int) params.get("GN_GGA_count"));
         assertTrue(1 == (int) params.get("GN_RMC_count"));
         assertTrue(2 == (int) params.get("GA_GSV_count"));
+
+        System.out.println("GN_n_sats_used: "+params.get("GN_n_sats_used"));
+        System.out.println("GN_sat_ids: "+params.get("GN_sat_ids"));
 
         assertTrue(params.get("GN_lat").toString().startsWith("0.1"));
         assertTrue(params.get("GN_lon").toString().startsWith("-0.2"));

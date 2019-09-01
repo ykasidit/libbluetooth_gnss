@@ -38,7 +38,7 @@ public class rfcomm_conn_mgr {
     String m_tcp_server_host;
     int m_tcp_server_port;
     boolean m_readline_callback_mode = false;
-
+    boolean m_secure = true;
     volatile boolean closed = false;
 
     public static BluetoothDevice get_first_bonded_bt_device_where_name_contains(String contains) throws Exception
@@ -91,18 +91,20 @@ public class rfcomm_conn_mgr {
 
 
     //use this ctor for readline callback mode
-    public rfcomm_conn_mgr(BluetoothDevice target_bt_server_dev, rfcomm_conn_callbacks cb) throws Exception {
+    public rfcomm_conn_mgr(BluetoothDevice target_bt_server_dev, boolean secure, rfcomm_conn_callbacks cb) throws Exception {
         m_readline_callback_mode = true;
-        init(target_bt_server_dev, null, 0, cb);
+        m_secure = secure;
+        init(target_bt_server_dev, secure, null, 0, cb);
     }
 
     //use this ctor and specify tcp_server_host, tcp_server_port for connect-and-stream-data-to-your-tcp-server mode
-    public rfcomm_conn_mgr(BluetoothDevice target_bt_server_dev, final String tcp_server_host, final int tcp_server_port, rfcomm_conn_callbacks cb) throws Exception {
-        init(target_bt_server_dev, tcp_server_host, tcp_server_port, cb);
+    public rfcomm_conn_mgr(BluetoothDevice target_bt_server_dev, boolean secure, final String tcp_server_host, final int tcp_server_port, rfcomm_conn_callbacks cb) throws Exception {
+        init(target_bt_server_dev, secure, tcp_server_host, tcp_server_port, cb);
     }
 
-    private void init(BluetoothDevice target_bt_server_dev, final String tcp_server_host, final int tcp_server_port, rfcomm_conn_callbacks cb) throws Exception
+    private void init(BluetoothDevice target_bt_server_dev, boolean secure, final String tcp_server_host, final int tcp_server_port, rfcomm_conn_callbacks cb) throws Exception
     {
+        m_secure = secure;
         m_rfcomm_to_tcp_callbacks = cb;
 
         if (tcp_server_host == null) {
@@ -131,6 +133,9 @@ public class rfcomm_conn_mgr {
     public void connect() throws Exception
     {
         try {
+
+            BluetoothAdapter.getDefaultAdapter().cancelDiscovery();
+
             ParcelUuid[] uuids = m_target_bt_server_dev.getUuids();
             UUID found_spp_uuid = null;
             for (ParcelUuid uuid : uuids) {
@@ -147,7 +152,15 @@ public class rfcomm_conn_mgr {
                 throw new Exception("Failed to find SPP uuid in target bluetooth device - ABORT");
             }
 
-            m_bs = m_target_bt_server_dev.createInsecureRfcommSocketToServiceRecord(found_spp_uuid);
+            if (m_secure) {
+                Log.d(TAG, "createRfcommSocketToServiceRecord");
+                m_bs = m_target_bt_server_dev.createRfcommSocketToServiceRecord(found_spp_uuid);
+            } else {
+                Log.d(TAG, "createInsecureRfcommSocketToServiceRecord");
+                m_bs = m_target_bt_server_dev.createInsecureRfcommSocketToServiceRecord(found_spp_uuid);
+            }
+
+            BluetoothAdapter.getDefaultAdapter().cancelDiscovery();
             Log.d(TAG, "calling m_bs.connect() start m_target_bt_server_dev: name: "+m_target_bt_server_dev.getName() +" bdaddr: "+m_target_bt_server_dev.getAddress());
             m_bs.connect();
             Log.d(TAG, "calling m_bs.connect() done m_target_bt_server_dev: name: "+m_target_bt_server_dev.getName() +" bdaddr: "+m_target_bt_server_dev.getAddress());
@@ -253,6 +266,10 @@ public class rfcomm_conn_mgr {
                                 Log.d(TAG, "rfcomm_to_tcp m_conn_state_watcher ending with signal from close()");
                             } else {
                                 Log.d(TAG, "rfcomm_to_tcp m_conn_state_watcher ending with exception: " + Log.getStackTraceString(e));
+                                try {
+                                    if (m_rfcomm_to_tcp_callbacks != null)
+                                        m_rfcomm_to_tcp_callbacks.on_rfcomm_disconnected();
+                                } catch (Exception ee) {}
                             }
                             break;
                         }

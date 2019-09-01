@@ -1,10 +1,12 @@
 package com.clearevo.libecodroidgnss_parse;
 
+import android.os.SystemClock;
 import android.util.Log;
 
 import net.sf.marineapi.nmea.parser.DataNotAvailableException;
 import net.sf.marineapi.nmea.parser.SentenceFactory;
 import net.sf.marineapi.nmea.sentence.GGASentence;
+import net.sf.marineapi.nmea.sentence.GSASentence;
 import net.sf.marineapi.nmea.sentence.RMCSentence;
 import net.sf.marineapi.nmea.sentence.Sentence;
 import net.sf.marineapi.nmea.sentence.TalkerId;
@@ -71,6 +73,7 @@ public class gnss_sentence_parser {
 
             /////////////////////// parse and put main params in hashmap
 
+            //System.out.println("got parsed read_line: "+ret);
 
             if (sentence instanceof GGASentence) {
                 GGASentence gga = (GGASentence) sentence;
@@ -132,6 +135,13 @@ public class gnss_sentence_parser {
                 if (m_cb != null) {
                     m_cb.on_updated_nmea_params(m_parsed_params_hashmap);
                 }
+            } else if (sentence instanceof GSASentence) {
+                GSASentence gsa = (GSASentence) sentence;
+                try {
+                    String[] sids = gsa.getSatelliteIds();
+                    put_param(talker_id,"n_sats_used", sids.length);
+                    put_param(talker_id,"sat_ids", String.join(",", sids));
+                } catch (DataNotAvailableException dae) {}
             }
 
         } catch (Exception e) {
