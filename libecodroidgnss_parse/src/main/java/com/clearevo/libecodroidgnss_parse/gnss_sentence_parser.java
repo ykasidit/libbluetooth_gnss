@@ -7,6 +7,7 @@ import net.sf.marineapi.nmea.parser.DataNotAvailableException;
 import net.sf.marineapi.nmea.parser.SentenceFactory;
 import net.sf.marineapi.nmea.sentence.GGASentence;
 import net.sf.marineapi.nmea.sentence.GSASentence;
+import net.sf.marineapi.nmea.sentence.GSVSentence;
 import net.sf.marineapi.nmea.sentence.RMCSentence;
 import net.sf.marineapi.nmea.sentence.Sentence;
 import net.sf.marineapi.nmea.sentence.TalkerId;
@@ -141,6 +142,12 @@ public class gnss_sentence_parser {
                     String[] sids = gsa.getSatelliteIds();
                     put_param(talker_id,"n_sats_used", sids.length);
                     put_param(talker_id,"sat_ids", String.join(",", sids));
+                } catch (DataNotAvailableException dae) {}
+            } else if (sentence instanceof GSVSentence) {
+                GSVSentence gsv = (GSVSentence) sentence;
+                try {
+                    int sc = gsv.getSatelliteCount();
+                    put_param(talker_id,"n_sats_in_view", sc);
                 } catch (DataNotAvailableException dae) {}
             }
 

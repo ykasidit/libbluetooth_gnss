@@ -444,6 +444,15 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
             "GL"
     };
 
+    double DEFAULT_UBLOX_M8030_CEP = 2.0;
+    double DEFAULT_UBLOX_ZED_F9P_CEP = 1.5;
+
+    public double get_connected_device_CEP()
+    {
+        //TODO - later set per detected device or adjustable by user in settings
+        return DEFAULT_UBLOX_M8030_CEP;
+    }
+
     @Override
     public void on_updated_nmea_params(HashMap<String, Object> params_map) {
 
@@ -463,7 +472,7 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
                             alt = (double) params_map.get(talker+"_alt");
                             hdop = (double) params_map.get(talker+"_hdop");
 
-                            setMock(lat, lon, alt, (float) hdop);
+                            setMock(lat, lon, alt, (float) (hdop * get_connected_device_CEP()));
                             params_map.put("lat", lat);
                             params_map.put("lon", lon);
                             params_map.put("alt", alt);
