@@ -2,8 +2,12 @@ package com.clearevo.libecodroidbluetooth;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothSocket;
+import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.os.ParcelUuid;
+import android.os.Parcelable;
 import android.util.Log;
 
 import java.io.Closeable;
@@ -20,7 +24,9 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class rfcomm_conn_mgr {
 
-    BluetoothSocket m_bs;
+    BluetoothSocket m_bluetooth_socket;
+    InputStream m_sock_is;
+    OutputStream m_sock_os;
     Socket m_tcp_server_sock;
     BluetoothDevice m_target_bt_server_dev;
 
@@ -32,6 +38,7 @@ public class rfcomm_conn_mgr {
     ConcurrentLinkedQueue<byte[]> m_incoming_buffers;
     ConcurrentLinkedQueue<byte[]> m_outgoing_buffers;
 
+    final int MAX_SDP_FETCH_DURATION_SECS = 15;
     final int BTINCOMING_QUEUE_MAX_LEN = 100;
     static final String TAG = "btgnss_rfcmgr";
 
@@ -40,6 +47,36 @@ public class rfcomm_conn_mgr {
     boolean m_readline_callback_mode = false;
     boolean m_secure = true;
     volatile boolean closed = false;
+    Parcelable[] m_fetched_uuids = null;
+    Context m_context;
+
+
+    private final BroadcastReceiver mReceiver = new BroadcastReceiver() {
+        public void onReceive(Context context, Intent intent) {
+            String action = intent.getAction();
+
+            if (BluetoothDevice.ACTION_UUID.equals(action)) {
+                // from https://stackoverflow.com/questions/14812326/android-bluetooth-get-uuids-of-discovered-devices
+                // This is when we can be assured that fetchUuidsWithSdp has completed.
+                // So get the uuids and call fetchUuidsWithSdp on another device in list
+
+                Log.d(TAG, "broadcastreceiver: got BluetoothDevice.ACTION_UUID");
+                BluetoothDevice deviceExtra = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
+                Parcelable[] uuidExtra = intent.getParcelableArrayExtra(BluetoothDevice.EXTRA_UUID);
+                Log.d(TAG, "broadcastreceiver: DeviceExtra: " + deviceExtra + " uuidExtra: "+uuidExtra);
+
+                if (uuidExtra != null) {
+                    for (Parcelable p : uuidExtra) {
+                        Log.d(TAG, "broadcastreceiver: uuidExtra parcelable part: " + p);
+                    }
+                    m_fetched_uuids = uuidExtra;
+                } else {
+                    Log.d(TAG, "broadcastreceiver: uuidExtra == null");
+                }
+            }
+        }
+    };
+
 
     public static BluetoothDevice get_first_bonded_bt_device_where_name_contains(String contains) throws Exception
     {
@@ -91,24 +128,33 @@ public class rfcomm_conn_mgr {
 
 
     //use this ctor for readline callback mode
-    public rfcomm_conn_mgr(BluetoothDevice target_bt_server_dev, boolean secure, rfcomm_conn_callbacks cb) throws Exception {
+    public rfcomm_conn_mgr(BluetoothDevice target_bt_server_dev, boolean secure, rfcomm_conn_callbacks cb, Context context) throws Exception {
         m_readline_callback_mode = true;
         m_secure = secure;
-        init(target_bt_server_dev, secure, null, 0, cb);
+        init(target_bt_server_dev, secure, null, 0, cb, context);
     }
 
     //use this ctor and specify tcp_server_host, tcp_server_port for connect-and-stream-data-to-your-tcp-server mode
-    public rfcomm_conn_mgr(BluetoothDevice target_bt_server_dev, boolean secure, final String tcp_server_host, final int tcp_server_port, rfcomm_conn_callbacks cb) throws Exception {
-        init(target_bt_server_dev, secure, tcp_server_host, tcp_server_port, cb);
+    public rfcomm_conn_mgr(BluetoothDevice target_bt_server_dev, boolean secure, final String tcp_server_host, final int tcp_server_port, rfcomm_conn_callbacks cb, Context context) throws Exception {
+        init(target_bt_server_dev, secure, tcp_server_host, tcp_server_port, cb, context);
     }
 
-    private void init(BluetoothDevice target_bt_server_dev, boolean secure, final String tcp_server_host, final int tcp_server_port, rfcomm_conn_callbacks cb) throws Exception
+    private void init(BluetoothDevice target_bt_server_dev, boolean secure, final String tcp_server_host, final int tcp_server_port, rfcomm_conn_callbacks cb, Context context) throws Exception
     {
+        m_context = context;
         m_secure = secure;
         m_rfcomm_to_tcp_callbacks = cb;
 
         if (tcp_server_host == null) {
             Log.d(TAG, "tcp_server_host null so disabled conencting to tcp server mode...");
+        }
+
+        if (context == null) {
+            throw new Exception("invalid context supplied is null");
+        }
+
+        if (target_bt_server_dev == null) {
+            throw new Exception("invalid target_bt_server_dev supplied is null");
         }
 
         m_target_bt_server_dev = target_bt_server_dev;
@@ -126,8 +172,13 @@ public class rfcomm_conn_mgr {
         if (m_rfcomm_to_tcp_callbacks == null)
             throw new Exception("m_rfcomm_to_tcp_callbacks not specified");
 
+        IntentFilter filter = new IntentFilter(BluetoothDevice.ACTION_UUID);
+        m_context.registerReceiver(mReceiver, filter);
+
         Log.d(TAG, "init() done m_readline_callback_mode: "+m_readline_callback_mode);
     }
+
+
 
 
     public void connect() throws Exception
@@ -136,13 +187,54 @@ public class rfcomm_conn_mgr {
 
             BluetoothAdapter.getDefaultAdapter().cancelDiscovery();
 
-            ParcelUuid[] uuids = m_target_bt_server_dev.getUuids();
+            //always fetch fresh data from sdp - rfcomm channel numbers can change
+            m_fetched_uuids = null;
+            boolean fret = m_target_bt_server_dev.fetchUuidsWithSdp();
+            if (!fret) {
+                throw new Exception("fetchUuidsWithSdp returned false...");
+            }
+            Log.d(TAG, "fetch uuid started");
+
+
+            final int total_wait_millis = MAX_SDP_FETCH_DURATION_SECS * 1000;
+            final int fetch_recheck_steps = 30;
+            final int fetch_recheck_step_duration = total_wait_millis / fetch_recheck_steps;
+
+            for (int retry = 0; retry < fetch_recheck_steps; retry++){
+
+                if (m_fetched_uuids != null) {
+                    Log.d(TAG, "fetch uuid complete at retry: "+retry);
+                    break; //fetch uuid success
+                }
+                Thread.sleep(fetch_recheck_step_duration);
+                Log.d(TAG, "fetch uuid still not complete at retry: "+retry);
+            }
+
+
+            if (m_fetched_uuids == null) {
+                throw new Exception("failed to get uuids from target device");
+            }
+
             UUID found_spp_uuid = null;
-            for (ParcelUuid uuid : uuids) {
+            for (Parcelable parcelable : m_fetched_uuids) {
+
+                if (parcelable == null) {
+                    continue;
+                }
+
+                if (!(parcelable instanceof ParcelUuid))
+                    continue;
+                ParcelUuid parcelUuid = (ParcelUuid) parcelable;
+
+                UUID this_uuid = parcelUuid.getUuid();
+                if (this_uuid == null) {
+                    continue;
+                }
+
                 //Log.d(TAG, "target_dev uuid: " + uuid.toString());
                 //00001101-0000-1000-8000-00805f9b34fb
-                if (uuid.toString().startsWith("00001101")) {
-                    found_spp_uuid = uuid.getUuid();
+                if (this_uuid.toString().startsWith("00001101")) {
+                    found_spp_uuid = this_uuid;
                 }
             }
 
@@ -154,22 +246,22 @@ public class rfcomm_conn_mgr {
 
             if (m_secure) {
                 Log.d(TAG, "createRfcommSocketToServiceRecord");
-                m_bs = m_target_bt_server_dev.createRfcommSocketToServiceRecord(found_spp_uuid);
+                m_bluetooth_socket = m_target_bt_server_dev.createRfcommSocketToServiceRecord(found_spp_uuid);
             } else {
                 Log.d(TAG, "createInsecureRfcommSocketToServiceRecord");
-                m_bs = m_target_bt_server_dev.createInsecureRfcommSocketToServiceRecord(found_spp_uuid);
+                m_bluetooth_socket = m_target_bt_server_dev.createInsecureRfcommSocketToServiceRecord(found_spp_uuid);
             }
 
             BluetoothAdapter.getDefaultAdapter().cancelDiscovery();
-            Log.d(TAG, "calling m_bs.connect() start m_target_bt_server_dev: name: "+m_target_bt_server_dev.getName() +" bdaddr: "+m_target_bt_server_dev.getAddress());
-            m_bs.connect();
-            Log.d(TAG, "calling m_bs.connect() done m_target_bt_server_dev: name: "+m_target_bt_server_dev.getName() +" bdaddr: "+m_target_bt_server_dev.getAddress());
+            Log.d(TAG, "calling m_bluetooth_socket.connect() start m_target_bt_server_dev: name: "+m_target_bt_server_dev.getName() +" bdaddr: "+m_target_bt_server_dev.getAddress());
+            m_bluetooth_socket.connect();
+            Log.d(TAG, "calling m_bluetooth_socket.connect() done m_target_bt_server_dev: name: "+m_target_bt_server_dev.getName() +" bdaddr: "+m_target_bt_server_dev.getAddress());
 
             if (m_rfcomm_to_tcp_callbacks != null)
                 m_rfcomm_to_tcp_callbacks.on_rfcomm_connected();
 
-            InputStream bs_is = m_bs.getInputStream();
-            OutputStream bs_os = m_bs.getOutputStream();
+            InputStream bs_is = m_bluetooth_socket.getInputStream();
+            OutputStream bs_os = m_bluetooth_socket.getOutputStream();
 
             m_cleanup_closables.add(bs_is);
             m_cleanup_closables.add(bs_os);
@@ -209,23 +301,23 @@ public class rfcomm_conn_mgr {
                 //open client socket to target tcp server
                 Log.d(TAG, "start opening tcp socket to host: " + m_tcp_server_host + " port: " + m_tcp_server_port);
                 m_tcp_server_sock = new Socket(m_tcp_server_host, m_tcp_server_port);
-                InputStream sock_is = m_tcp_server_sock.getInputStream();
-                OutputStream sock_os = m_tcp_server_sock.getOutputStream();
+                m_sock_is = m_tcp_server_sock.getInputStream();
+                m_sock_os = m_tcp_server_sock.getOutputStream();
                 Log.d(TAG, "done opening tcp socket to host: " + m_tcp_server_host + " port: " + m_tcp_server_port);
 
-                m_cleanup_closables.add(sock_is);
-                m_cleanup_closables.add(sock_os);
+                m_cleanup_closables.add(m_sock_is);
+                m_cleanup_closables.add(m_sock_os);
 
                 if (m_rfcomm_to_tcp_callbacks != null)
                     m_rfcomm_to_tcp_callbacks.on_target_tcp_connected();
 
                 //start thread to read socket to outgoing_buffer
-                tmp_sock_is_reader_thread = new inputstream_to_queue_reader_thread(sock_is, m_outgoing_buffers);
+                tmp_sock_is_reader_thread = new inputstream_to_queue_reader_thread(m_sock_is, m_outgoing_buffers);
                 tmp_sock_is_reader_thread.start();
                 m_cleanup_closables.add(tmp_sock_is_reader_thread);
 
                 //start thread to write from incoming buffer to socket
-                tmp_sock_os_writer_thread = new queue_to_outputstream_writer_thread(m_incoming_buffers, sock_os);
+                tmp_sock_os_writer_thread = new queue_to_outputstream_writer_thread(m_incoming_buffers, m_sock_os);
                 tmp_sock_os_writer_thread.start();
                 m_cleanup_closables.add(tmp_sock_os_writer_thread);
             }
@@ -288,13 +380,17 @@ public class rfcomm_conn_mgr {
     public boolean is_bt_connected()
     {
         try {
-            return m_bs.isConnected();
+            return m_bluetooth_socket.isConnected();
 
         } catch (Exception e){
         }
         return false;
     }
 
+    public void add_send_buffer(byte[] buffer)
+    {
+        m_outgoing_buffers.add(buffer);
+    }
 
     public boolean isClosed()
     {
@@ -310,17 +406,25 @@ public class rfcomm_conn_mgr {
         closed = true;
 
         try {
+            if (m_context != null && mReceiver != null) {
+                m_context.unregisterReceiver(mReceiver);
+            }
+        } catch (Exception e) {
+        }
+
+
+        try {
             m_conn_state_watcher.interrupt();
             m_conn_state_watcher = null;
         } catch (Exception e) {
         }
 
         try {
-            m_bs.close();
-            Log.d(TAG,"m_bs close() done");
+            m_bluetooth_socket.close();
+            Log.d(TAG,"m_bluetooth_socket close() done");
         } catch (Exception e) {
         }
-        m_bs = null;
+        m_bluetooth_socket = null;
 
         try {
             if (m_tcp_server_sock != null) {

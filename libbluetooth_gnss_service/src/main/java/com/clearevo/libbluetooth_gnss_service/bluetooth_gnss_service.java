@@ -48,6 +48,10 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
     Class m_target_activity_class;
     int m_icon_id;
 
+    boolean m_ubx_mode = true;
+    boolean m_ubx_send_enable_extra_used_packets = true;
+    boolean m_ubx_send_disable_extra_used_packets = false;
+
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         // If we get killed, after returning from here, restart
@@ -74,7 +78,7 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
                     toast(msg);
                 } else {
                     Log.d(TAG, "onStartCommand got bdaddr");
-                    int start_ret = connect(m_bdaddr, m_secure_rfcomm);
+                    int start_ret = connect(m_bdaddr, m_secure_rfcomm, getApplicationContext());
                     if (start_ret == 0) {
                         start_foreground("Connecting...", "target device: " + m_bdaddr, "");
                     }
@@ -105,8 +109,65 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
         return m_connecting_thread != null && m_connecting_thread.isAlive();
     }
 
+    Thread m_auto_reconnect_thread = null;
+    public static final long AUTO_RECONNECT_MILLIS = 30*1000;
 
-    int connect(String bdaddr, boolean secure)
+    void start_auto_reconnect_thread()
+    {
+        if (m_auto_reconnect) {
+
+            if (m_auto_reconnect_thread != null && m_auto_reconnect_thread.isAlive()) {
+                //interrupt old thread so it will end...
+                try {
+                    m_auto_reconnect_thread.interrupt();
+                } catch (Exception e) {
+                    Log.d(TAG, "interrrupt old m_auto_reconnect_thread failed exception: "+Log.getStackTraceString(e));
+                }
+            }
+
+            m_auto_reconnect_thread = new Thread() {
+
+                public void run(){
+
+                    Log.d(TAG, "auto-reconnect thread: "+this.hashCode()+" START");
+
+                    while (m_auto_reconnect_thread == this && m_auto_reconnect) {
+
+                        try {
+                            Log.d(TAG, "auto-reconnect thread: "+this.hashCode()+" - start sleep");
+                            Thread.sleep(AUTO_RECONNECT_MILLIS);
+                        } catch (InterruptedException e) {
+                            Log.d(TAG, "auto-reconnect thread: "+this.hashCode()+" - sleep interrupted likely by close() - break out of loop and end now");
+                            break;
+                        }
+
+                        //connect() must be run from main service thread in case it needs to post
+                        if (m_bdaddr != null && m_bdaddr.length() > 0 && !is_bt_connected() && !is_conn_thread_alive()) {
+                            Log.d(TAG, "auto-reconnect thread - has target dev and not connected - try reconnect...");
+                            m_handler.post(new Runnable() {
+                                @Override
+                                public void run() {
+                                    toast("Auto-Reconnect: Trying to connect...");
+                                    connect(m_bdaddr, m_secure_rfcomm, getApplicationContext());
+                                }
+                            });
+                        } else {
+                            Log.d(TAG, "auto-reconnect thread - likely already connecting or already connected or no target dev");
+                        }
+
+
+                    }
+
+                    Log.d(TAG, "auto-reconnect thread: "+this.hashCode()+" END");
+                }
+
+            };
+            m_auto_reconnect_thread.start();
+
+        }
+    }
+
+    int connect(String bdaddr, boolean secure, Context context)
     {
         int ret = -1;
 
@@ -130,6 +191,7 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
                 }
                 BluetoothAdapter.getDefaultAdapter().cancelDiscovery();
                 BluetoothDevice dev = BluetoothAdapter.getDefaultAdapter().getRemoteDevice(bdaddr);
+
                 if (dev == null) {
                     toast("Please pair your Bluetooth GPS Receiver in phone Bluetooth Settings...");
                     throw new Exception("no paired bluetooth devices...");
@@ -137,10 +199,12 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
                     //ok
                 }
                 Log.d(TAG, "using dev: " + dev.getAddress());
-                g_rfcomm_mgr = new rfcomm_conn_mgr(dev, secure, this);
+                g_rfcomm_mgr = new rfcomm_conn_mgr(dev, secure, this, context);
 
                 start_connecting_thread();
-
+                if (m_auto_reconnect) {
+                    start_auto_reconnect_thread();
+                }
             }
             ret = 0;
         } catch (Exception e) {
@@ -155,6 +219,12 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
     //return true if was connected
     public boolean close()
     {
+        try {
+            m_auto_reconnect_thread.interrupt();
+        } catch (Exception e) {
+        }
+        m_auto_reconnect_thread = null;
+
         if (g_rfcomm_mgr != null) {
             boolean was_connected = g_rfcomm_mgr.is_bt_connected();
             g_rfcomm_mgr.close();
@@ -166,8 +236,15 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
 
     void toast(String msg)
     {
-        Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
-        Log.d(TAG, "toast msg: "+msg);
+        //dont toast if running in background
+        if (m_is_bound) {
+            Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
+            Log.d(TAG, "toast msg: "+msg);
+        } else {
+            Log.d(TAG, "m_is_bound false so omit: toast msg: "+msg);
+        }
+
+
     }
 
     public void on_rfcomm_connected()
@@ -182,6 +259,34 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
                     }
                 }
         );
+
+        //try send some initial ubx queries to device:
+        if (m_ubx_mode && m_ubx_send_enable_extra_used_packets) {
+            new Thread() {
+                public void run() {
+                    try {
+
+                        //send enable pubx config data - for pubx accuracies
+                        byte[] buffer = fromHexString("B5 62 06 01 03 00 F1 00 01 FC 13");
+                        g_rfcomm_mgr.add_send_buffer(buffer);
+
+                    } catch (Exception e) {
+                        Log.d(TAG, "m_ubx_send_enable_extra_used_packets exception: "+Log.getStackTraceString(e));
+                    }
+                }
+            }.start();
+        }
+    }
+
+    public static final byte[] fromHexString(final String s) {
+        String[] v = s.split(" ");
+        byte[] arr = new byte[v.length];
+        int i = 0;
+        for(String val: v) {
+            arr[i++] =  Integer.decode("0x" + val).byteValue();
+
+        }
+        return arr;
     }
 
     public void on_rfcomm_disconnected()
@@ -193,26 +298,6 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
                     public void run() {
                         toast("Disconnected...");
                         updateNotification("Disconnected...", "Target device: "+m_bdaddr, "");
-
-                        if (m_auto_reconnect) {
-                            toast("Auto-Reconnect in 5 seconds...");
-                            new Thread() {
-                                public void run(){
-                                    try {
-                                        Thread.sleep(5000);
-                                    } catch (Exception e) {}
-
-                                    //connect() must be run from main service thread in case it needs to post
-                                    m_handler.post(new Runnable() {
-                                        @Override
-                                        public void run() {
-                                            connect(m_bdaddr, m_secure_rfcomm);
-                                        }
-                                    });
-                                }
-
-                            }.start();
-                        }
                     }
                 }
         );
@@ -471,14 +556,26 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
                             lon = (double) params_map.get(talker+"_lon");
                             alt = (double) params_map.get(talker+"_alt");
                             hdop = (double) params_map.get(talker+"_hdop");
+                            double accuracy = -1.0;
+                            if (params_map.containsKey("UBX_POSITION_hAcc")) {
+                                try {
+                                    accuracy = Double.parseDouble((String) params_map.get("UBX_POSITION_hAcc"));
+                                } catch (Exception e) {}
+                            }
 
-                            setMock(lat, lon, alt, (float) (hdop * get_connected_device_CEP()));
-                            params_map.put("lat", lat);
-                            params_map.put("lon", lon);
-                            params_map.put("alt", alt);
-                            params_map.put("hdop", hdop);
-                            params_map.put("location_from_talker", talker);
-                            params_map.put("mock_location_set_ts", System.currentTimeMillis());
+                            //if not ubx or ubx conv failed...
+                            if (accuracy == -1.0) {
+
+                                accuracy = hdop * get_connected_device_CEP();
+                            }
+                            setMock(lat, lon, alt, (float) accuracy);
+                            m_gnss_parser.put_param("", "lat", lat);
+                            m_gnss_parser.put_param("", "lon", lon);
+                            m_gnss_parser.put_param("", "alt", alt);
+                            m_gnss_parser.put_param("", "hdop", hdop);
+                            m_gnss_parser.put_param("", "accuracy", accuracy);
+                            m_gnss_parser.put_param("", "location_from_talker", talker);
+                            m_gnss_parser.put_param("", "mock_location_set_ts", System.currentTimeMillis());
 
                             break;
                         } else {
@@ -513,9 +610,17 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
         }
     }
 
+    boolean m_is_bound = false;
+
+    @Override
+    public boolean onUnbind(Intent intent) {
+        m_is_bound = false;
+        return super.onUnbind(intent);
+    }
 
     @Override
     public IBinder onBind(Intent intent) {
+        m_is_bound = true;
         Log.d(TAG, "onBind()");
         return m_binder;
     }
@@ -524,8 +629,7 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
     public void onDestroy() {
         Log.d(TAG, "onDestroy()");
         boolean was_connected = close();
-        if (was_connected) {
-            Toast.makeText(this, "Bluetooth GNSS Disconnected...", Toast.LENGTH_SHORT).show();
-        }
+
+        Toast.makeText(this, "Stopped Bluetooth GNSS Service...", Toast.LENGTH_SHORT).show();
     }
 }
