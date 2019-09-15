@@ -13,6 +13,7 @@ import org.junit.Test;
 import java.util.HashMap;
 import java.util.List;
 
+import static com.clearevo.libecodroidgnss_parse.gnss_sentence_parser.toHexString;
 import static org.junit.Assert.*;
 
 /**
@@ -20,10 +21,10 @@ import static org.junit.Assert.*;
  *
  * @see <a href="http://d.android.com/tools/testing">Testing documentation</a>
  */
-public class test_gga_parse {
+public class test_nmea_parse {
 
     @Test
-    public void test() {
+    public void test() throws Exception {
 
         SentenceFactory sf = SentenceFactory.getInstance();
         GGASentence gga = (GGASentence) sf.createParser(TalkerId.GN, "GGA");
@@ -34,10 +35,9 @@ public class test_gga_parse {
         System.out.println("gga sentence: "+example_nmea_gga);
 
         //the strings below are not collected from same device/time so the will not match logcally like upx n sats used wont match gsa etc...
+        //the strings below hold some originally ubx messages but since they are in java strings now THEY ARE NOT CORRECT UBX ANYMORE see test_java_strings_must_not_be_used_to_store_binary_data.java unittest - we leave them here just to auto test filtering out by the parser func but they cannot be used to test ubx pkt parsing
         String[] nmeas = {
                 example_nmea_gga,
-
-
                 "$GAGSV,2,1,07,02,28,068,28,07,04,307,21,13,16,327,29,15,68,339,,0*73\n",
                 "$GAGSV,2,1,07,02,28,068,28,07,04,307,21,13,16,327,29,15,68,339,,0*73\n",
                 "�b\u00010\u0004\u0001�e�\u0011\u0015\u0004\u0000\u0000\n" +
@@ -100,12 +100,13 @@ public class test_gga_parse {
                 "03:52:31  $GNGLL,0641.64673,N,10137.05675,E,035231.00,A,A*77\n",
                 "03:52:31  $PUBX,00,035231.00,0641.64673,N,10137.05675,E,19.144,G3,1.2,2.2,0.015,0.00,0.037,,0.51,0.93,0.58,26,0,0*6D\n",
                 "03:52:31  $PUBX,03,32,2,U,352,30,41,064,5,U,295,67,38,064,6,U,039,18,28,064,9,e,049,03,,000,12,U,295,44,46,064,13,U,171,32,31,061,15,U,204,12,32,064,17,U,106,34,31,007,19,U,089,43,27,003,24,-,235,06,,000,25,-,315,08,,000,28,e,154,06,,000,30,-,123,-2,,000,211,e,165,14,18,000,214,U,180,53,30,020,219,-,208,07,,000,221,-,307,05,,000,222,U,354,29,41,064,229,U,068,52,24,000,234,U,280,29,43,064,236,e,093,00,,000,241,U,214,40,28,026,243,U,051,26,30,064,159,-,099,45,,000,160,-,253,68,,000,161,-,122,77,,000,162,-,094,23,,000,163,-,264,40,,000,33,e,132,54,10,000,34,U,177,42,30,020,35,U,020,28,30,064,36,e,169,43,,000*38\n" ,
-                "03:52:31  $PUBX,04,035231.00,140919,532351.00,2070,18,541289,165.421,08*1A"
+                "03:52:31  $PUBX,04,035231.00,140919,532351.00,2070,18,541289,165.421,08*1A\n",
+                "chad_yak_pai_wangkeaw_leaw"+example_nmea_gga
         };
 
         gnss_sentence_parser parser = new gnss_sentence_parser();
         for (String nmea : nmeas) {
-            parser.parse(nmea);
+            parser.parse(nmea.getBytes("ascii"));
         }
 
         HashMap<String, Object> params = parser.get_params();
@@ -113,8 +114,8 @@ public class test_gga_parse {
             System.out.println("param key: "+key+" val: "+params.get(key));
         }
 
-        assertTrue(1 <= (int) params.get("GN_GGA_count"));
-        assertTrue(1 <= (int) params.get("GN_RMC_count"));
+        assertTrue(2 == (int) params.get("GN_GGA_count"));
+        assertTrue(1 == (int) params.get("GN_RMC_count"));
         assertTrue(2 <= (int) params.get("GA_GSV_count"));
 
         System.out.println("GP_n_sats_in_view: "+params.get("GP_n_sats_in_view"));
@@ -141,6 +142,9 @@ public class test_gga_parse {
         assertTrue(params.get("GN_lat").toString().startsWith("0.1"));
         assertTrue(params.get("GN_lat_str").toString().startsWith("0.1"));
         assertTrue(params.get("GN_lon").toString().startsWith("-0.2"));
+
+
+
 
     }
 }

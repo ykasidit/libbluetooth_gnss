@@ -1,7 +1,10 @@
 package com.clearevo.libbluetooth_gnss_service;
 
+import com.clearevo.libecodroidgnss_parse.gnss_sentence_parser;
+
 import org.junit.Test;
 
+import static com.clearevo.libecodroidgnss_parse.gnss_sentence_parser.toHexString;
 import static org.junit.Assert.*;
 
 /**
@@ -11,19 +14,10 @@ import static org.junit.Assert.*;
  */
 public class ExampleUnitTest {
 
-    public static String byteArrayToHex(byte[] a) {
-        StringBuilder sb = new StringBuilder(a.length * 2);
-        for(byte b: a)
-            sb.append(String.format("%02x", b));
-        return sb.toString();
-    }
-
     @Test
-    public void addition_isCorrect() {
+    public void test() {
 
 
-        byte[] buffer = bluetooth_gnss_service.fromHexString("B5 6206 01 03 00 F1 00 01 FC 13");
-        System.out.println("buffer: "+byteArrayToHex(buffer));
 
     }
 }

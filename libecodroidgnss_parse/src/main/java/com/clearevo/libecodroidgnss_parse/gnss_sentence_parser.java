@@ -30,7 +30,7 @@ public class gnss_sentence_parser {
             "$"+ TalkerId.GL, //GLONASS
             "$"+ TalkerId.GA, //Galileo
             "$"+ TalkerId.GB, //BeiDou
-            "$PUBX"
+            "$PUBX",
     };
     gnss_parser_callbacks m_cb;
     SentenceFactory m_sf = SentenceFactory.getInstance();
@@ -41,17 +41,25 @@ public class gnss_sentence_parser {
     }
 
     //returns valid parsed nmea or null if parse failed
-    public String parse(String read_line) {
-        String nmea = read_line;
+    public String parse(byte[] read_line_raw_bytes) throws Exception{
 
+        if (read_line_raw_bytes == null)
+            return null;
+
+        //TODO: look for ubx messages, parse for all ubx until no more ubx are found, then conv the remainder to str and parse nmea - unittest first
+
+        String nmea = new String(read_line_raw_bytes, "ascii");
         boolean found_and_filt_to_prefix = false;
         for (String NMEA_PREFIX : KNOWN_NMEA_PREFIX_LIST) {
             if (nmea != null && nmea.contains(NMEA_PREFIX)) {
                 if (nmea.startsWith(NMEA_PREFIX)) {
                     //ok good
                 } else {
+                    int nmea_start_pos = nmea.indexOf(NMEA_PREFIX);
                     //get substring starting with it
-                    nmea = nmea.substring(nmea.indexOf(NMEA_PREFIX));
+                    String prefix_non_nmea = nmea.substring(0, nmea_start_pos);
+                    filter_for_ubx_messages(prefix_non_nmea);
+                    nmea = nmea.substring(nmea_start_pos);
                     //System.out.println("nmea substring filt done: " + nmea);
                 }
                 nmea = nmea.trim(); //this api requires complete valid sentence - no newlines at end...
@@ -256,6 +264,22 @@ public class gnss_sentence_parser {
         return ret;
     }
 
+    public void filter_for_ubx_messages(String non_nmea)
+    {
+        byte[] buff = non_nmea.getBytes();
+
+        System.out.println("filter_for_ubx_messages: "+non_nmea);
+        int ubx_header_pos = -1;
+        for (int i = 0; i < buff.length; i++) {
+            if (i < 4)
+                System.out.println("filter_for_ubx_messages loop: "+String.format("%02X", buff[i]));
+            //get ubx header: B5 62
+            if (buff[i] == 0x62 && i > 0 && buff[i-1] == 0xB5) {
+                ubx_header_pos = i;
+            }
+        }
+        System.out.println("ubx_header_pos: "+ubx_header_pos);
+    }
 
     // put into m_parsed_params_hashmap directly if is int/long/double/string else conv to string then put... also ass its <param>_ts timestamp
     public void put_param(String talker_id, String param_name, Object val)
@@ -382,6 +406,24 @@ public class gnss_sentence_parser {
     public void set_callback(gnss_parser_callbacks cb){
         Log.d(TAG, "set_callback() "+cb);
         m_cb = cb;
+    }
+
+    public static final byte[] fromHexString(final String s) {
+        String[] v = s.split(" ");
+        byte[] arr = new byte[v.length];
+        int i = 0;
+        for(String val: v) {
+            arr[i++] =  Integer.decode("0x" + val).byteValue();
+
+        }
+        return arr;
+    }
+
+    public static String toHexString(byte[] a) {
+        StringBuilder sb = new StringBuilder(a.length * 2);
+        for(byte b: a)
+            sb.append(String.format("%02X ", b));
+        return sb.toString().trim();
     }
 
 

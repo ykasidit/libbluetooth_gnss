@@ -30,6 +30,8 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 
+import static com.clearevo.libecodroidgnss_parse.gnss_sentence_parser.fromHexString;
+
 
 public class bluetooth_gnss_service extends Service implements rfcomm_conn_callbacks, gnss_sentence_parser.gnss_parser_callbacks {
 
@@ -265,11 +267,9 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
             new Thread() {
                 public void run() {
                     try {
-
-                        //send enable pubx config data - for pubx accuracies
-                        byte[] buffer = fromHexString("B5 62 06 01 03 00 F1 00 01 FC 13");
-                        g_rfcomm_mgr.add_send_buffer(buffer);
-
+                        g_rfcomm_mgr.add_send_buffer(fromHexString("B5 62 06 01 03 00 F1 00 01 FC 13"));  //enable pubx config data - for pubx accuracies
+                        g_rfcomm_mgr.add_send_buffer(fromHexString("B5 62 0A 04 00 00 0E 34"));  //poll ubx-mon-ver for hardware/firmware info of the receiver
+                        g_rfcomm_mgr.add_send_buffer(fromHexString("B5 62 0A 28 00 00 32 A0"));  //poll ubx-mon-gnss default system-settings
                     } catch (Exception e) {
                         Log.d(TAG, "m_ubx_send_enable_extra_used_packets exception: "+Log.getStackTraceString(e));
                     }
@@ -278,16 +278,7 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
         }
     }
 
-    public static final byte[] fromHexString(final String s) {
-        String[] v = s.split(" ");
-        byte[] arr = new byte[v.length];
-        int i = 0;
-        for(String val: v) {
-            arr[i++] =  Integer.decode("0x" + val).byteValue();
 
-        }
-        return arr;
-    }
 
     public void on_rfcomm_disconnected()
     {
@@ -328,16 +319,20 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
         m_connecting_thread.start();
     }
 
-    public void on_readline(String readline)
+    public void on_readline(byte[] readline)
     {
-        //Log.d(TAG, "on_readline()");
-        String parsed_nmea = m_gnss_parser.parse(readline);
+        try {
+            //Log.d(TAG, "on_readline()");
+            String parsed_nmea = m_gnss_parser.parse(readline);
 
-        if (false && parsed_nmea != null) {
-            Intent intent = new Intent();
-            intent.setAction(BROADCAST_ACTION_NMEA);
-            intent.putExtra("NMEA", parsed_nmea);
-            getApplicationContext().sendBroadcast(intent);
+            if (false && parsed_nmea != null) {
+                Intent intent = new Intent();
+                intent.setAction(BROADCAST_ACTION_NMEA);
+                intent.putExtra("NMEA", parsed_nmea);
+                getApplicationContext().sendBroadcast(intent);
+            }
+        } catch (Exception e) {
+            Log.d(TAG, "bluetooth_gnss_service on_readline parse exception: "+Log.getStackTraceString(e));
         }
     }
 
