@@ -1,6 +1,5 @@
 package com.clearevo.libecodroidgnss_parse;
 
-import android.os.SystemClock;
 import android.util.Log;
 
 import net.sf.marineapi.nmea.parser.DataNotAvailableException;
@@ -18,6 +17,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+
+import static com.clearevo.libecodroidgnss_parse.ubx_parser.ubx_parse_get_n_bytes_consumed;
 
 
 public class gnss_sentence_parser {
@@ -41,14 +42,53 @@ public class gnss_sentence_parser {
     }
 
     //returns valid parsed nmea or null if parse failed
-    public String parse(byte[] read_line_raw_bytes) throws Exception{
+    public String parse(byte[] read_line_raw_bytes) throws Exception {
 
         if (read_line_raw_bytes == null)
             return null;
 
-        //TODO: look for ubx messages, parse for all ubx until no more ubx are found, then conv the remainder to str and parse nmea - unittest first
+        //parse ubx messages if came in this same line first
 
-        String nmea = new String(read_line_raw_bytes, "ascii");
+        int pos_after_ubx_parse = ubx_parse_get_n_bytes_consumed(read_line_raw_bytes);
+        int len_remain = read_line_raw_bytes.length - pos_after_ubx_parse;
+        if (len_remain <= 0)
+            return null;
+
+        //String nmea = new String(read_line_raw_bytes, pos_after_ubx_parse, len_remain, "ascii"); //parse from remaining bytes
+        String nmea = new String(read_line_raw_bytes, "ascii"); //parse nmea from all bytes
+
+        /* this should not happen - the case was because a wrong crlf raw buff reader code
+        final String NMEA_SPLIT_STR_REGEX = "\\$";
+        final String NMEA_SPLIT_STR = "$";
+        final int MIN_NMEA_STR_LEN = 5;
+
+        //if multiple sentences in one line
+        if (nmea.indexOf(NMEA_SPLIT_STR) != nmea.lastIndexOf(NMEA_SPLIT_STR)) {
+            String ret = null;
+            String[] parts = nmea.split(NMEA_SPLIT_STR_REGEX);
+            System.out.println("parts: " + parts.length);
+            for (String part : parts) {
+                if (part.length() < MIN_NMEA_STR_LEN)
+                    continue;
+                String try_sentence = NMEA_SPLIT_STR + part;
+                try {
+                    String try_ret = parse_nmea_string(try_sentence);
+                    if (try_ret != null)
+                        ret = try_ret;
+                } catch (Exception e) {
+                    Log.d(TAG, "multi sentence in one line exception: "+Log.getStackTraceString(e));
+                }
+            }
+            return ret;
+        }
+        */
+        //normal case
+        return parse_nmea_string(nmea);
+    }
+
+
+    public String parse_nmea_string(String nmea) throws Exception{
+
         boolean found_and_filt_to_prefix = false;
         for (String NMEA_PREFIX : KNOWN_NMEA_PREFIX_LIST) {
             if (nmea != null && nmea.contains(NMEA_PREFIX)) {
@@ -58,7 +98,7 @@ public class gnss_sentence_parser {
                     int nmea_start_pos = nmea.indexOf(NMEA_PREFIX);
                     //get substring starting with it
                     String prefix_non_nmea = nmea.substring(0, nmea_start_pos);
-                    filter_for_ubx_messages(prefix_non_nmea);
+                    //do something with the prefix_non_nmea if required here
                     nmea = nmea.substring(nmea_start_pos);
                     //System.out.println("nmea substring filt done: " + nmea);
                 }
@@ -264,23 +304,6 @@ public class gnss_sentence_parser {
         return ret;
     }
 
-    public void filter_for_ubx_messages(String non_nmea)
-    {
-        byte[] buff = non_nmea.getBytes();
-
-        System.out.println("filter_for_ubx_messages: "+non_nmea);
-        int ubx_header_pos = -1;
-        for (int i = 0; i < buff.length; i++) {
-            if (i < 4)
-                System.out.println("filter_for_ubx_messages loop: "+String.format("%02X", buff[i]));
-            //get ubx header: B5 62
-            if (buff[i] == 0x62 && i > 0 && buff[i-1] == 0xB5) {
-                ubx_header_pos = i;
-            }
-        }
-        System.out.println("ubx_header_pos: "+ubx_header_pos);
-    }
-
     // put into m_parsed_params_hashmap directly if is int/long/double/string else conv to string then put... also ass its <param>_ts timestamp
     public void put_param(String talker_id, String param_name, Object val)
     {
@@ -420,9 +443,16 @@ public class gnss_sentence_parser {
     }
 
     public static String toHexString(byte[] a) {
+        return toHexString(a, 0, a.length);
+    }
+
+    public static String toHexString(byte[] a, int offset, int len) {
         StringBuilder sb = new StringBuilder(a.length * 2);
-        for(byte b: a)
+        byte b;
+        for(int i = 0; i < len; i++) {
+            b = a[offset + i];
             sb.append(String.format("%02X ", b));
+        }
         return sb.toString().trim();
     }
 

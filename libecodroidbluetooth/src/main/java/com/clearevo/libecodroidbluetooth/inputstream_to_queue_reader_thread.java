@@ -1,9 +1,9 @@
 package com.clearevo.libecodroidbluetooth;
 import android.util.Log;
 
+import java.io.BufferedInputStream;
 import java.io.Closeable;
 import java.io.InputStream;
-import java.io.PushbackInputStream;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 
@@ -14,11 +14,15 @@ public class inputstream_to_queue_reader_thread extends Thread implements Closea
     ConcurrentLinkedQueue<byte[]> m_queue;
 
     final String TAG = "btgnss_istqrt";
-    public static final int READ_BUF_SIZE = 20480;
-    public static final int PUSHBACK_BUF_SIZE = READ_BUF_SIZE*10;
+
+    public static final int MAX_READ_BUF_SIZE = 204800;
+    byte[] m_read_buffer = new byte[MAX_READ_BUF_SIZE];
+    public static final int BUFFERED_INPUTSTREAM_SIZE = MAX_READ_BUF_SIZE *10;
     public static final byte[] CRLF = {0x0D, 0x0A};
+
     readline_callbacks m_readline_cb;
-    PushbackInputStream m_pb_is;
+    BufferedInputStream m_bis;
+
     String wk = "kasidit_yak_pai_wangkeaw_leaw_na";
 
     //read to queue mode
@@ -48,12 +52,12 @@ public class inputstream_to_queue_reader_thread extends Thread implements Closea
         m_is = null;
 
         try {
-            if (m_pb_is != null) {
-                m_pb_is.close();
+            if (m_bis != null) {
+                m_bis.close();
             }
         } catch (Exception e) {
         }
-        m_pb_is = null;
+        m_bis = null;
 
         this.interrupt();
         m_queue = null;
@@ -74,7 +78,7 @@ public class inputstream_to_queue_reader_thread extends Thread implements Closea
 
             if (readline_mode) {
                 m_queue = null;
-                m_pb_is = new PushbackInputStream(m_is, PUSHBACK_BUF_SIZE);
+                m_bis = new BufferedInputStream(m_is, BUFFERED_INPUTSTREAM_SIZE);
             }
 
             while (true) {
@@ -85,11 +89,20 @@ public class inputstream_to_queue_reader_thread extends Thread implements Closea
                     DONT use 'readers' that do readline() as they return strings and this 'encodes' our raw packets which are changed when we do .getbytes('ascii') later
                     so use pusbackinputstreams and read until we get 0d 0a instead...
                     */
-                    byte[] read_line = bytes_readline(m_pb_is);
-                    m_readline_cb.on_readline(read_line); //if pushback buffer is full then this thread will end and exception logged, conn closed so conn watcher would trigger disconnected stage so user would know somethings wrong anyway...
+                    Log.d(TAG, "m_is avail: "+m_is.available()+" m_bis avail: "+m_bis.available());
+                    byte[] read_line = bytes_readline(m_bis, m_read_buffer);
+                    if (read_line == null) {
+                        Log.d(TAG, "read_line got null m_bis available len: "+m_bis.available());
+                    } else {
+                        try {
+                            Log.d(TAG, "read_line not null len: " + read_line.length + " m_bis available len: " + m_bis.available() + " valstr: " + new String(read_line, "ascii"));
+                        } catch (Exception e) {}
+                        m_readline_cb.on_readline(read_line); //if pushback buffer is full then this thread will end and exception logged, conn closed so conn watcher would trigger disconnected stage so user would know somethings wrong anyway...
+                    }
+
 
                 } else {
-                    byte[] read_tmp_buff = new byte[READ_BUF_SIZE];
+                    byte[] read_tmp_buff = new byte[MAX_READ_BUF_SIZE];
                     n_read = m_is.read(read_tmp_buff);
                     if (n_read > 0) {
                         byte[] buf = new byte[n_read];
@@ -114,20 +127,48 @@ public class inputstream_to_queue_reader_thread extends Thread implements Closea
     }
 
 
-    //NOTE: below func can fail with a full pushback buffer full - handle its exception accordingly
-    public static byte[] bytes_readline(PushbackInputStream pb_is) throws Exception
+    static public byte[] bytes_readline(InputStream bis, byte[] tmp_read_buffer) throws Exception
     {
-        return bytes_read_until_sequence(pb_is, CRLF);
+        final int read_buffer_max_len = tmp_read_buffer.length;
+        int read;
+        for (int i = 0; i < read_buffer_max_len; i++) {
+            read = bis.read();
+            if (read == -1) {
+                return null;
+            }
+            tmp_read_buffer[i] = (byte) read;
+            if (i > 0 && tmp_read_buffer[i] == CRLF[1] && tmp_read_buffer[i-1] == CRLF[0]) {
+                //ok we got CRLF now so copy and return a new array until this position
+                final int total_read_bytes = i+1;
+                byte[] readline_buffer = new byte[total_read_bytes];
+                System.arraycopy(tmp_read_buffer, 0, readline_buffer, 0, total_read_bytes);
+                return readline_buffer;
+            }
+        }
+        return null;
     }
 
-    public static byte[] bytes_read_until_sequence(PushbackInputStream pb_is, byte[] suffix_sequence) throws Exception
+
+    /* too complex and seems to have a performance bug and skipping data too - dont use it
+
+    //NOTE: below func can fail with a full pushback buffer full - handle its exception accordingly
+    public static byte[] bytes_readline(PushbackInputStream pb_is, byte[] read_buffer) throws Exception
+    {
+        return bytes_read_until_sequence(pb_is, CRLF, read_buffer);
+    }
+
+
+    public static byte[] bytes_read_until_sequence(PushbackInputStream pb_is, byte[] suffix_sequence, byte[] read_buffer) throws Exception
     {
         if (suffix_sequence.length == 0) {
             throw new Exception("invalid suffix_sequence.length == 0 supplied");
         }
 
-        byte[] read_buffer = new byte[READ_BUF_SIZE];
         int nread = pb_is.read(read_buffer);
+
+        try {
+            Log.d("btgnssitq", "bytes_read_until_sequence read_buffer string: " + new String(read_buffer, 0, nread, "ascii"));
+        } catch (Exception e) {}
 
         int crlf_end_pos = -1;
         int suffix_seq_len = suffix_sequence.length;
@@ -178,4 +219,6 @@ public class inputstream_to_queue_reader_thread extends Thread implements Closea
             return readline_buffer;
         }
     }
+
+     */
 }

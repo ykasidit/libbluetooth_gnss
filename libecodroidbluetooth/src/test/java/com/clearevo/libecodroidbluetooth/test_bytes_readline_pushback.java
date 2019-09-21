@@ -2,11 +2,8 @@ package com.clearevo.libecodroidbluetooth;
 import org.junit.Test;
 
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.PushbackInputStream;
-import java.util.concurrent.ConcurrentLinkedQueue;
+import java.io.InputStream;
 
-import static com.clearevo.libecodroidbluetooth.inputstream_to_queue_reader_thread.READ_BUF_SIZE;
 import static junit.framework.TestCase.assertTrue;
 
 
@@ -43,17 +40,17 @@ public class test_bytes_readline_pushback {
         };
 
         byte[] ori_buffer = fromHexString(ori_hex_str);
-        PushbackInputStream pbis = new PushbackInputStream(new ByteArrayInputStream(ori_buffer), inputstream_to_queue_reader_thread.PUSHBACK_BUF_SIZE);
+        InputStream is = new ByteArrayInputStream(ori_buffer);
 
         int buffer_count = 0;
         while (true) {
-            byte[] read_buff = inputstream_to_queue_reader_thread.bytes_readline(pbis);
+            byte[] read_buff = inputstream_to_queue_reader_thread.bytes_readline(is, new byte[inputstream_to_queue_reader_thread.MAX_READ_BUF_SIZE]);
             if (read_buff == null) {
                 assertTrue(buffer_count == assert_result_hex_strs.length);
                 break;
             }
             String read_buff_hex = toHexString(read_buff);
-            System.out.println("buffer_count "+buffer_count+" read_buff_hex: "+read_buff_hex);
+            System.out.println("buffer_count "+buffer_count+" read_buff_hex: "+read_buff_hex+" assert same as: "+assert_result_hex_strs[buffer_count]);
             assertTrue(read_buff_hex.equals(assert_result_hex_strs[buffer_count]));
             buffer_count++;
         }

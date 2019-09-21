@@ -322,15 +322,17 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
     public void on_readline(byte[] readline)
     {
         try {
-            //Log.d(TAG, "on_readline()");
+            Log.d(TAG, "on_readline()");
             String parsed_nmea = m_gnss_parser.parse(readline);
 
-            if (false && parsed_nmea != null) {
+            /* too much cpu usage - anyone who wants this can uncomment and rebuild project
+            if (parsed_nmea != null) {
                 Intent intent = new Intent();
                 intent.setAction(BROADCAST_ACTION_NMEA);
                 intent.putExtra("NMEA", parsed_nmea);
                 getApplicationContext().sendBroadcast(intent);
             }
+            */
         } catch (Exception e) {
             Log.d(TAG, "bluetooth_gnss_service on_readline parse exception: "+Log.getStackTraceString(e));
         }
