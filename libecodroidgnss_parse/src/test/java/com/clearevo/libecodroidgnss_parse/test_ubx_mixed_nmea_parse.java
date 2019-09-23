@@ -1,5 +1,7 @@
 package com.clearevo.libecodroidgnss_parse;
 
+import android.util.Log;
+
 import net.sf.marineapi.nmea.parser.SentenceFactory;
 import net.sf.marineapi.nmea.sentence.GGASentence;
 import net.sf.marineapi.nmea.sentence.TalkerId;
@@ -30,7 +32,7 @@ public class test_ubx_mixed_nmea_parse {
         String[] test_hex_strings = {
                 "B5 62 06 01 03 00 F1 00 01 FC 13",  // a ubx packet
                 "B5 62 06 01 03 00 F1 00 01 FC 13 31 34 30 0D 0A",  // a ubx packet + '140' ascii + crlf
-                "B5 62 06 01 03 00 F1 00 01 FC 13 B5 62 06 01 03 00 F1 00 01 FC 13",  // two ubx packets
+                "B5 62 06 01 03 00 F1 00 01 FC 13 0D 0A B5 62 06 01 03 00 F1 00 01 FC 13",  // two ubx packets
                 "B5 62 06 01 03 00 F1 00 01 FC 13 0A",  // two ubx packets + lf
                 "31 34 30 0D 0A",
                 toHexString(example_nmea_gga.getBytes("ascii"))
@@ -39,7 +41,7 @@ public class test_ubx_mixed_nmea_parse {
         int[] assert_consumed_les = {
                 11,
                 11,
-                22,
+                24,
                 11,
                 0,
                 0
@@ -60,12 +62,16 @@ public class test_ubx_mixed_nmea_parse {
 
             //i == 5 is not ubx so below will fail
             if (i < 5) {
+                System.out.println("start test ubx + nmea i: "+i);
                 //test ubx buffer + valid nmea parse
                 ByteArrayOutputStream baos = new ByteArrayOutputStream();
                 baos.write(example_line_buffer);
                 baos.write(example_nmea_gga.getBytes("ascii"));
+                System.out.println("start test ubx + nmea i: "+i+"new parser");
                 gnss_sentence_parser gp = new gnss_sentence_parser();
+                System.out.println("start test ubx + nmea i: "+i+"new parser parse() start ====== ");
                 assertTrue(example_nmea_gga.equals(gp.parse(baos.toByteArray()).trim()));
+                System.out.println("start test ubx + nmea i: "+i+"new parser parse() done =======");
             }
             i++;
         }

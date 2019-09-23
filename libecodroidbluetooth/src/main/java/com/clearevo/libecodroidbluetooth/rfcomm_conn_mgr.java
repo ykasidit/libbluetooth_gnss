@@ -41,7 +41,8 @@ public class rfcomm_conn_mgr {
     final int MAX_SDP_FETCH_DURATION_SECS = 15;
     final int BTINCOMING_QUEUE_MAX_LEN = 100;
     static final String TAG = "btgnss_rfcmgr";
-
+    static final String SPP_UUID_PREFIX = "00001101";
+    static final UUID SPP_WELL_KNOWN_UUNID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
     String m_tcp_server_host;
     int m_tcp_server_port;
     boolean m_readline_callback_mode = false;
@@ -67,7 +68,7 @@ public class rfcomm_conn_mgr {
 
                 if (uuidExtra != null) {
                     for (Parcelable p : uuidExtra) {
-                        Log.d(TAG, "broadcastreceiver: uuidExtra parcelable part: " + p);
+                        Log.d(TAG, "in broadcastreceiver: uuidExtra parcelable part: " + p);
                     }
                     m_fetched_uuids = uuidExtra;
                 } else {
@@ -180,82 +181,116 @@ public class rfcomm_conn_mgr {
 
 
 
+    public UUID fetch_dev_uuid_with_prefix(String uuid_prefix) throws Exception
+    {
+        BluetoothAdapter.getDefaultAdapter().cancelDiscovery();
+
+        //always fetch fresh data from sdp - rfcomm channel numbers can change
+        m_fetched_uuids = null;
+        boolean fret = m_target_bt_server_dev.fetchUuidsWithSdp();
+        if (!fret) {
+            throw new Exception("fetchUuidsWithSdp returned false...");
+        }
+        Log.d(TAG, "fetch uuid started");
+
+
+        final int total_wait_millis = MAX_SDP_FETCH_DURATION_SECS * 1000;
+        final int fetch_recheck_steps = 30;
+        final int fetch_recheck_step_duration = total_wait_millis / fetch_recheck_steps;
+
+        for (int retry = 0; retry < fetch_recheck_steps; retry++){
+
+            if (m_fetched_uuids != null) {
+                Log.d(TAG, "fetch uuid complete at retry: "+retry);
+                break; //fetch uuid success
+            }
+            Thread.sleep(fetch_recheck_step_duration);
+            Log.d(TAG, "fetch uuid still not complete at retry: "+retry);
+        }
+
+
+        if (m_fetched_uuids == null) {
+            throw new Exception("failed to get uuids from target device");
+        }
+
+        UUID found_spp_uuid = null;
+        for (Parcelable parcelable : m_fetched_uuids) {
+
+            if (parcelable == null) {
+                continue;
+            }
+
+            if (!(parcelable instanceof ParcelUuid))
+                continue;
+            ParcelUuid parcelUuid = (ParcelUuid) parcelable;
+
+            UUID this_uuid = parcelUuid.getUuid();
+            if (this_uuid == null) {
+                continue;
+            }
+
+            //Log.d(TAG, "target_dev uuid: " + uuid.toString());
+            //00001101-0000-1000-8000-00805f9b34fb
+            if (this_uuid.toString().startsWith(uuid_prefix)) {
+                found_spp_uuid = this_uuid;
+            }
+        }
+
+        Log.d(TAG, "found_spp_uuid: " + found_spp_uuid);
+        BluetoothAdapter.getDefaultAdapter().cancelDiscovery();
+
+        return found_spp_uuid;
+    }
+
 
     public void connect() throws Exception
     {
+        Log.d(TAG, "connect() start");
+
         try {
 
-            BluetoothAdapter.getDefaultAdapter().cancelDiscovery();
-
-            //always fetch fresh data from sdp - rfcomm channel numbers can change
-            m_fetched_uuids = null;
-            boolean fret = m_target_bt_server_dev.fetchUuidsWithSdp();
-            if (!fret) {
-                throw new Exception("fetchUuidsWithSdp returned false...");
-            }
-            Log.d(TAG, "fetch uuid started");
-
-
-            final int total_wait_millis = MAX_SDP_FETCH_DURATION_SECS * 1000;
-            final int fetch_recheck_steps = 30;
-            final int fetch_recheck_step_duration = total_wait_millis / fetch_recheck_steps;
-
-            for (int retry = 0; retry < fetch_recheck_steps; retry++){
-
-                if (m_fetched_uuids != null) {
-                    Log.d(TAG, "fetch uuid complete at retry: "+retry);
-                    break; //fetch uuid success
+            try {
+                if (m_bluetooth_socket != null) {
+                    m_bluetooth_socket.close();
+                    Log.d(TAG, "m_bluetooth_socket close() done");
                 }
-                Thread.sleep(fetch_recheck_step_duration);
-                Log.d(TAG, "fetch uuid still not complete at retry: "+retry);
+            } catch (Exception e) {
             }
+            m_bluetooth_socket = null;
 
-
-            if (m_fetched_uuids == null) {
-                throw new Exception("failed to get uuids from target device");
-            }
-
-            UUID found_spp_uuid = null;
-            for (Parcelable parcelable : m_fetched_uuids) {
-
-                if (parcelable == null) {
-                    continue;
+            try {
+                if (m_secure) {
+                    Log.d(TAG, "createRfcommSocketToServiceRecord SPP_WELL_KNOWN_UUNID");
+                    m_bluetooth_socket = m_target_bt_server_dev.createRfcommSocketToServiceRecord(SPP_WELL_KNOWN_UUNID);
+                } else {
+                    Log.d(TAG, "createInsecureRfcommSocketToServiceRecord SPP_WELL_KNOWN_UUNID");
+                    m_bluetooth_socket = m_target_bt_server_dev.createInsecureRfcommSocketToServiceRecord(SPP_WELL_KNOWN_UUNID);
                 }
 
-                if (!(parcelable instanceof ParcelUuid))
-                    continue;
-                ParcelUuid parcelUuid = (ParcelUuid) parcelable;
-
-                UUID this_uuid = parcelUuid.getUuid();
-                if (this_uuid == null) {
-                    continue;
+                if (m_bluetooth_socket == null)
+                    throw new Exception("create rfcommsocket failed - got null ret from SPP_WELL_KNOWN_UUNID sock create to dev");
+            } catch (Exception e) {
+                Log.d(TAG, "alternative0 - try connect using well-knwon spp uuid failed - try fetch uuids and connect with found matching spp uuid...");
+                UUID found_spp_uuid = fetch_dev_uuid_with_prefix(SPP_UUID_PREFIX);
+                if (found_spp_uuid == null) {
+                    throw new Exception("Failed to find SPP uuid in target bluetooth device (alternative0) - ABORT");
+                }
+                if (m_secure) {
+                    Log.d(TAG, "alt0 createRfcommSocketToServiceRecord fetcheduuid");
+                    m_bluetooth_socket = m_target_bt_server_dev.createRfcommSocketToServiceRecord(found_spp_uuid);
+                } else {
+                    Log.d(TAG, "alt0 createInsecureRfcommSocketToServiceRecord fetcheduuid");
+                    m_bluetooth_socket = m_target_bt_server_dev.createInsecureRfcommSocketToServiceRecord(found_spp_uuid);
                 }
 
-                //Log.d(TAG, "target_dev uuid: " + uuid.toString());
-                //00001101-0000-1000-8000-00805f9b34fb
-                if (this_uuid.toString().startsWith("00001101")) {
-                    found_spp_uuid = this_uuid;
-                }
-            }
-
-            Log.d(TAG, "found_spp_uuid: " + found_spp_uuid);
-
-            if (found_spp_uuid == null) {
-                throw new Exception("Failed to find SPP uuid in target bluetooth device - ABORT");
-            }
-
-            if (m_secure) {
-                Log.d(TAG, "createRfcommSocketToServiceRecord");
-                m_bluetooth_socket = m_target_bt_server_dev.createRfcommSocketToServiceRecord(found_spp_uuid);
-            } else {
-                Log.d(TAG, "createInsecureRfcommSocketToServiceRecord");
-                m_bluetooth_socket = m_target_bt_server_dev.createInsecureRfcommSocketToServiceRecord(found_spp_uuid);
+                if (m_bluetooth_socket == null)
+                    throw new Exception("create rfcommsocket failed - got null ret from alternative0 sock create to dev");
             }
 
             BluetoothAdapter.getDefaultAdapter().cancelDiscovery();
-            Log.d(TAG, "calling m_bluetooth_socket.connect() start m_target_bt_server_dev: name: "+m_target_bt_server_dev.getName() +" bdaddr: "+m_target_bt_server_dev.getAddress());
+            Log.d(TAG, "calling m_bluetooth_socket.connect() START m_target_bt_server_dev: name: "+m_target_bt_server_dev.getName() +" bdaddr: "+m_target_bt_server_dev.getAddress());
             m_bluetooth_socket.connect();
-            Log.d(TAG, "calling m_bluetooth_socket.connect() done m_target_bt_server_dev: name: "+m_target_bt_server_dev.getName() +" bdaddr: "+m_target_bt_server_dev.getAddress());
+            Log.d(TAG, "calling m_bluetooth_socket.connect() DONE m_target_bt_server_dev: name: "+m_target_bt_server_dev.getName() +" bdaddr: "+m_target_bt_server_dev.getAddress());
 
             if (m_rfcomm_to_tcp_callbacks != null)
                 m_rfcomm_to_tcp_callbacks.on_rfcomm_connected();

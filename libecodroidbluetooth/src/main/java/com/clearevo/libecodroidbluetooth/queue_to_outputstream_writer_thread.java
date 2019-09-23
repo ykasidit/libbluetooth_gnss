@@ -10,8 +10,8 @@ public class queue_to_outputstream_writer_thread extends Thread implements Close
 
     ConcurrentLinkedQueue<byte[]> m_queue;
     OutputStream m_os;
-
     final String TAG = "btgnss_qtowt";
+    public static final int SLEEP_IF_NO_DATA_MILLIS = 200;
 
     public queue_to_outputstream_writer_thread(ConcurrentLinkedQueue<byte[]> queue, OutputStream os)
     {
@@ -33,6 +33,7 @@ public class queue_to_outputstream_writer_thread extends Thread implements Close
 
     public void run()
     {
+        Log.d(TAG, "thread start");
         try {
             while (true) {
                 //System.out.println("m_queue poll pre poll");
@@ -40,6 +41,8 @@ public class queue_to_outputstream_writer_thread extends Thread implements Close
                 //System.out.println("m_queue poll buf:" + out_buf);
                 if (out_buf != null && out_buf.length > 0) {
                     m_os.write(out_buf);
+                } else {
+                    Thread.sleep(SLEEP_IF_NO_DATA_MILLIS);
                 }
             }
         } catch (Exception e) {

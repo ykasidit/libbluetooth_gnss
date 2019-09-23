@@ -67,6 +67,7 @@ public class inputstream_to_queue_reader_thread extends Thread implements Closea
     @Override
     public void run()
     {
+        Log.d(TAG, "thread start");
         try {
 
             boolean readline_mode = false;
@@ -81,6 +82,8 @@ public class inputstream_to_queue_reader_thread extends Thread implements Closea
                 m_bis = new BufferedInputStream(m_is, BUFFERED_INPUTSTREAM_SIZE);
             }
 
+            int loop = 0;
+
             while (true) {
 
                 if (readline_mode) {
@@ -89,13 +92,14 @@ public class inputstream_to_queue_reader_thread extends Thread implements Closea
                     DONT use 'readers' that do readline() as they return strings and this 'encodes' our raw packets which are changed when we do .getbytes('ascii') later
                     so use pusbackinputstreams and read until we get 0d 0a instead...
                     */
-                    Log.d(TAG, "m_is avail: "+m_is.available()+" m_bis avail: "+m_bis.available());
+                    Log.d(TAG, "loop: "+loop+" m_is avail: "+m_is.available()+" m_bis avail: "+m_bis.available());
                     byte[] read_line = bytes_readline(m_bis, m_read_buffer);
+
                     if (read_line == null) {
                         Log.d(TAG, "read_line got null m_bis available len: "+m_bis.available());
                     } else {
                         try {
-                            Log.d(TAG, "read_line not null len: " + read_line.length + " m_bis available len: " + m_bis.available() + " valstr: " + new String(read_line, "ascii"));
+                            Log.d(TAG, "read_line not null len: " + read_line.length + " m_bis available len: " + m_bis.available());
                         } catch (Exception e) {}
                         m_readline_cb.on_readline(read_line); //if pushback buffer is full then this thread will end and exception logged, conn closed so conn watcher would trigger disconnected stage so user would know somethings wrong anyway...
                     }
@@ -115,6 +119,8 @@ public class inputstream_to_queue_reader_thread extends Thread implements Closea
                         throw new Exception("invalid n_read reading from input stream: " + n_read);
                     }
                 }
+
+                loop++;
             }
         } catch (Exception e) {
             if (m_queue != null) { //dont log exception if close() already

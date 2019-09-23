@@ -49,13 +49,15 @@ public class gnss_sentence_parser {
 
         //parse ubx messages if came in this same line first
 
+        //Log.d(TAG, "pre ubx parse: "+toHexString(read_line_raw_bytes));
         int pos_after_ubx_parse = ubx_parse_get_n_bytes_consumed(read_line_raw_bytes);
         int len_remain = read_line_raw_bytes.length - pos_after_ubx_parse;
+        //Log.d(TAG, "post ubx parse: pos_after_ubx_parse: "+pos_after_ubx_parse+" len_remain: "+len_remain);
         if (len_remain <= 0)
             return null;
 
         //String nmea = new String(read_line_raw_bytes, pos_after_ubx_parse, len_remain, "ascii"); //parse from remaining bytes
-        String nmea = new String(read_line_raw_bytes, "ascii"); //parse nmea from all bytes
+        String nmea = new String(read_line_raw_bytes, "ascii"); //parse nmea from all bytes just to be sure
 
         /* this should not happen - the case was because a wrong crlf raw buff reader code
         final String NMEA_SPLIT_STR_REGEX = "\\$";
