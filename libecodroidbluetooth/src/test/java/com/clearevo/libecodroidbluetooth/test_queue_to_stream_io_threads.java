@@ -10,7 +10,7 @@ import static junit.framework.TestCase.assertTrue;
 public class test_queue_to_stream_io_threads {
 
     @Test
-    public void test() {
+    public void test() throws Exception {
 
         ConcurrentLinkedQueue<byte[]> incoming_buffers = new ConcurrentLinkedQueue<byte[]>();
         ConcurrentLinkedQueue<byte[]> outgoing_buffers = new ConcurrentLinkedQueue<byte[]>();

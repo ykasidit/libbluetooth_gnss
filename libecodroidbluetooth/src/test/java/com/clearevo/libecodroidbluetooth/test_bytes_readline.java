@@ -7,7 +7,7 @@ import java.io.InputStream;
 import static junit.framework.TestCase.assertTrue;
 
 
-public class test_bytes_readline_pushback {
+public class test_bytes_readline {
 
     public static final byte[] fromHexString(final String s) {
         String[] v = s.split(" ");

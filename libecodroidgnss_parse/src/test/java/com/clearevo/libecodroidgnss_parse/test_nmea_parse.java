@@ -66,6 +66,7 @@ public class test_nmea_parse {
                 "03:01:42  $GNGSA,A,3,81,67,66,79,78,,,,,,,,1.10,0.49,0.99,2*06\n",
                 "03:01:42  $GNGSA,A,3,04,33,19,31,24,12,,,,,,,1.10,0.49,0.99,3*05\n",
                 "03:01:42  $GNGSA,A,3,23,28,27,08,10,07,13,16,09,,,,1.10,0.49,0.99,4*05\n",
+                "$GNGSA,A,3,26,31,10,32,14,16,25,20,18,22,41,,1.34,0.74,1.12*16\n",
 
                 "03:52:31  $GPGSV,3,1,12,02,30,352,41,05,67,295,38,06,18,039,28,09,03,049,37,1*68\n",
                 "03:52:31  $GPGSV,3,2,12,12,44,295,46,13,32,171,31,15,12,204,32,17,34,106,31,1*6B\n",
@@ -120,7 +121,7 @@ public class test_nmea_parse {
 
         System.out.println("GP_n_sats_in_view: "+params.get("GP_n_sats_in_view"));
         System.out.println("GP_n_sats_used: "+params.get("GP_n_sats_used"));
-        assertTrue(8 == (int) params.get("GP_n_sats_used"));
+        assertTrue(11 == (int) params.get("GP_n_sats_used"));
         assertTrue(12 == (int) params.get("GP_n_sats_in_view"));
         assertTrue(12 == ((List)params.get("GP_sats_in_view_snr_list")).size());
 

@@ -11,6 +11,7 @@ import android.os.Parcelable;
 import android.util.Log;
 
 import java.io.Closeable;
+import java.io.File;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.Socket;
@@ -50,7 +51,6 @@ public class rfcomm_conn_mgr {
     volatile boolean closed = false;
     Parcelable[] m_fetched_uuids = null;
     Context m_context;
-
 
     private final BroadcastReceiver mReceiver = new BroadcastReceiver() {
         public void onReceive(Context context, Intent intent) {

@@ -235,7 +235,8 @@ public class gnss_sentence_parser {
                     try {
                         //Log.d(TAG, "gsa sentence:" +gsa.toString());
                         String[] sids = gsa.getSatelliteIds();
-                        String gsa_talker_id = get_gsa_talker_id_from_gsa_nmea(nmea);
+                        String gsa_talker_id = get_gsa_talker_id_from_gsa_nmea(nmea, sids);
+                        //Log.d(TAG, "gsa_talker_id: "+gsa_talker_id);
                         if (gsa_talker_id != null && talker_id.equals(TalkerId.GN.toString())) {
                             put_param(gsa_talker_id, "n_sats_used", sids.length);
                             put_param(gsa_talker_id, "sat_used_ids", str_list_to_csv(Arrays.asList(sids)));
@@ -368,7 +369,7 @@ public class gnss_sentence_parser {
         return false;
     }
 
-    public static String get_gsa_talker_id_from_gsa_nmea(String nmea)
+    public static String get_gsa_talker_id_from_gsa_nmea(String nmea, String[] sids)
     {
         if (nmea.contains(",")) {
             String[] parts = nmea.split(",");
@@ -379,6 +380,34 @@ public class gnss_sentence_parser {
                 int gnss_system_id = Integer.parseInt(part);
                 String gnss_system_id_talker_id = get_talker_id_for_gnss_system_id_int(gnss_system_id);
                 return gnss_system_id_talker_id;
+            } else {
+                //part is null so likely no GSA_SYSTEM_ID_NMEA_CSV_INDEX so infer for sat ids
+                //https://docs.novatel.com/OEM7/Content/Logs/GPGSA.htm
+
+                boolean is_gps = false;
+                boolean is_glonass = false;
+                for (String sid: sids) {
+                    try {
+                        int isid = Integer.parseInt(sid);
+                        //if ids are 1-32 so it is GPS
+                        //if ids are 65 to 96 then it is GLONASS
+                        if (isid >= 1 && isid <= 32) {
+                            is_gps = true;
+                        } else if (isid >= 65 && isid <= 96) {
+                            is_glonass = true;
+                        }
+                    } catch (Exception e) {
+
+                    }
+                }
+                if (is_gps) {
+                    return TalkerId.GP.toString();
+                }
+                if (is_glonass) {
+                    return TalkerId.GL.toString();
+                }
+
+
             }
         }
         return null;

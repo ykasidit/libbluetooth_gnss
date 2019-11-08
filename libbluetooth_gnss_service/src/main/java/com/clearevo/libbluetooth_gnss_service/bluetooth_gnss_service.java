@@ -11,9 +11,11 @@ import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.content.Context;
 import android.content.Intent;
+import android.location.Criteria;
 import android.os.Binder;
 import android.os.Handler;
 import android.os.IBinder;
+import android.support.v4.app.NotificationCompat;
 import android.util.Log;
 import android.widget.Toast;
 import android.location.LocationManager;
@@ -22,6 +24,8 @@ import android.os.Build;
 import android.os.SystemClock;
 import android.location.Location;
 
+import com.clearevo.libecodroidbluetooth.ntrip_conn_callbacks;
+import com.clearevo.libecodroidbluetooth.ntrip_conn_mgr;
 import com.clearevo.libecodroidbluetooth.rfcomm_conn_callbacks;
 import com.clearevo.libecodroidbluetooth.rfcomm_conn_mgr;
 import com.clearevo.libecodroidgnss_parse.gnss_sentence_parser;
@@ -33,11 +37,12 @@ import java.util.List;
 import static com.clearevo.libecodroidgnss_parse.gnss_sentence_parser.fromHexString;
 
 
-public class bluetooth_gnss_service extends Service implements rfcomm_conn_callbacks, gnss_sentence_parser.gnss_parser_callbacks {
+public class bluetooth_gnss_service extends Service implements rfcomm_conn_callbacks, gnss_sentence_parser.gnss_parser_callbacks, ntrip_conn_callbacks {
 
     static final String TAG = "btgnss_service";
 
     rfcomm_conn_mgr g_rfcomm_mgr = null;
+    ntrip_conn_mgr m_ntrip_conn_mgr = null;
     private gnss_sentence_parser m_gnss_parser = new gnss_sentence_parser();
 
     final String EDG_DEVICE_PREFIX = "EcoDroidGPS";
@@ -49,6 +54,8 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
     boolean m_secure_rfcomm = true;
     Class m_target_activity_class;
     int m_icon_id;
+    int m_ntrip_cb_count;
+    int m_ntrip_cb_count_added_to_send_buffer;
 
     boolean m_ubx_mode = true;
     boolean m_ubx_send_enable_extra_used_packets = true;
@@ -218,9 +225,41 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
         return ret;
     }
 
+
+    /* TODO
+    public int connect_ntrip()
+    {
+
+	m_ntrip_conn_mgr = null;
+	try {
+	    m_ntrip_conn_mgr = new ntrip_conn_mgr(host, port, first_mount_point, user, pass, this);
+	    m_ntrip_conn_mgr.connect();
+	    return 0;
+	} catch (Exception e) {
+	    Log.d(TAG, "connect_ntrip exception: "+Log.getStackTraceString(e));
+	    m_ntrip_conn_mgr = null;
+	}
+
+    }
+     */
+
+    @Override //ntrip data callbacks
+    public void on_read(byte[] read_buff) {
+        try {
+	    m_ntrip_cb_count += 1;
+            g_rfcomm_mgr.add_send_buffer(read_buff);
+	    m_ntrip_cb_count_added_to_send_buffer += 1;
+        } catch (Exception e) {
+            Log.d(TAG, "ntrip callback on_readline exception: "+ Log.getStackTraceString(e));
+        }
+    }
+    
+
     //return true if was connected
     public boolean close()
     {
+        deactivate_mock_location();
+
         try {
             m_auto_reconnect_thread.interrupt();
         } catch (Exception e) {
@@ -233,6 +272,15 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
             return was_connected;
         }
 
+        if (m_ntrip_conn_mgr != null) {
+            try {
+            m_ntrip_conn_mgr.close();
+            } catch (Exception e) {
+            }
+        }
+        m_ntrip_cb_count = 0;
+        m_ntrip_cb_count_added_to_send_buffer = 0;
+	
         return false;
     }
 
@@ -240,7 +288,11 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
     {
         //dont toast if running in background
         if (m_is_bound) {
-            Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
+            try {
+                Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
+            } catch (Exception e) {
+                Log.d(TAG, "toast() exception: "+Log.getStackTraceString(e));
+            }
             Log.d(TAG, "toast msg: "+msg);
         } else {
             Log.d(TAG, "m_is_bound false so omit: toast msg: "+msg);
@@ -292,7 +344,7 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
                     }
                 }
         );
-
+        deactivate_mock_location();
     }
 
     public void start_connecting_thread()
@@ -379,9 +431,9 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
 
     private Notification getMyActivityNotification(String title, String text, String ticker){
 
-        Intent notificationIntent = new Intent(this, m_target_activity_class);
+        Intent notificationIntent = new Intent(this.getApplicationContext(), m_target_activity_class);
         PendingIntent pendingIntent =
-                PendingIntent.getActivity(this, 0, notificationIntent, 0);
+                PendingIntent.getActivity(this.getApplicationContext(), 0, notificationIntent, 0);
 
 
         NotificationManager mNotificationManager =
@@ -394,14 +446,17 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
             mNotificationManager.createNotificationChannel(channel);
         }
 
-        Notification notification =
-                new Notification.Builder(this, notification_channel_id)
-                        .setContentTitle(title)
-                        .setContentText(text)
-                        .setSmallIcon(m_icon_id)
-                        .setContentIntent(pendingIntent)
-                        .setTicker(ticker)
-                        .build();
+        Notification notification = null;
+
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, notification_channel_id)
+                .setSmallIcon(m_icon_id)
+                .setContentTitle(title)
+                .setContentText(text)
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .setContentIntent(pendingIntent)
+                .setAutoCancel(true);
+
+        notification = builder.build();
 
         return notification;
     }
@@ -448,36 +503,28 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
         try {
 
             if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                Log.d(TAG,"is_mock_location_enabled Build.VERSION.SDK_INT >= Build.VERSION_CODES.M");
+                //Log.d(TAG,"is_mock_location_enabled Build.VERSION.SDK_INT >= Build.VERSION_CODES.M");
                 AppOpsManager opsManager = (AppOpsManager) context.getSystemService(Context.APP_OPS_SERVICE);
                 mock_enabled = (opsManager.checkOp(AppOpsManager.OPSTR_MOCK_LOCATION, app_uid, app_id_string)== AppOpsManager.MODE_ALLOWED);
             } else {
                 // in marshmallow this will always return true
-                Log.d(TAG,"is_mock_location_enabled older models");
+                //Log.d(TAG,"is_mock_location_enabled older models");
                 mock_enabled = !android.provider.Settings.Secure.getString(context.getContentResolver(), "mock_location").equals("0");
             }
         } catch(Exception e) {
             Log.d(TAG, "check mock_enabled exception: "+Log.getStackTraceString(e));
         }
-        Log.d(TAG,"is_mock_location_enabled ret "+mock_enabled);
+        //Log.d(TAG,"is_mock_location_enabled ret "+mock_enabled);
         return mock_enabled;
     }
 
     private void setMock(double latitude, double longitude, double altitude, float accuracy) {
+
+        activate_mock_location(); //this will check a static flag and not re-activate if already active
+
         LocationManager locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
-        locationManager.addTestProvider (LocationManager.GPS_PROVIDER,
-                "requiresNetwork" == "",
-                "requiresSatellite" == "",
-                "requiresCell" == "",
-                "hasMonetaryCost" == "",
-                "supportsAltitude" == "",
-                "supportsSpeed" == "",
-                "supportsBearing" == "",
-                android.location.Criteria.POWER_LOW,
-                android.location.Criteria.ACCURACY_FINE);
 
         Location newLocation = new Location(LocationManager.GPS_PROVIDER);
-
         newLocation.setLatitude(latitude);
         newLocation.setLongitude(longitude);
         newLocation.setAccuracy(accuracy);
@@ -487,13 +534,75 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
             newLocation.setElapsedRealtimeNanos(SystemClock.elapsedRealtimeNanos());
         }
-        locationManager.setTestProviderEnabled(LocationManager.GPS_PROVIDER, true);
-
         locationManager.setTestProviderStatus(LocationManager.GPS_PROVIDER,
                 LocationProvider.AVAILABLE,
                 null,System.currentTimeMillis());
-
         locationManager.setTestProviderLocation(LocationManager.GPS_PROVIDER, newLocation);
+    }
+
+    private void deactivate_mock_location() {
+        Log.d(TAG, "deactivate_mock_location0");
+        if (is_mock_location_active()) {
+            Log.d(TAG, "deactivate_mock_location1");
+            try {
+                LocationManager locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+                locationManager.setTestProviderEnabled(LocationManager.GPS_PROVIDER, false);
+                locationManager.removeTestProvider(LocationManager.GPS_PROVIDER);
+                g_mock_location_active = false;
+                m_handler.post(
+                        new Runnable() {
+                            @Override
+                            public void run() {
+                                toast("Deactivated Mock location provider...");
+                                updateNotification("Bluetooth GNSS - Not active...", "Deactivated", "");
+                            }
+                        }
+                );
+                Log.d(TAG, "deactivate_mock_location success");
+            } catch (Exception e) {
+                Log.d(TAG, "deactivate_mock_location exception: " + Log.getStackTraceString(e));
+            }
+        }
+        Log.d(TAG, "deactivate_mock_location return");
+    }
+
+    private void activate_mock_location() {
+        if (!is_mock_location_active()) {
+
+
+            try {
+                LocationManager locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+                locationManager.addTestProvider(LocationManager.GPS_PROVIDER,
+                        /*boolean requiresNetwork*/ false,
+                        /*boolean requiresSatellite*/ false,
+                        /*boolean requiresCell*/ false,
+                        /*boolean hasMonetaryCost*/ false,
+                        /*boolean supportsAltitude*/ true,
+                        /*boolean supportsSpeed*/ false,
+                        /*boolean supportsBearing */ false,
+                        android.location.Criteria.POWER_LOW,
+                        android.location.Criteria.ACCURACY_FINE);
+                locationManager.setTestProviderEnabled(LocationManager.GPS_PROVIDER, true);
+                m_handler.post(
+                        new Runnable() {
+                            @Override
+                            public void run() {
+                                toast("Activated Mock location provider...");
+                                updateNotification("Bluetooth GNSS - Active...", "Connected to: "+m_bdaddr, "");
+                            }
+                        }
+                );
+                g_mock_location_active = true;
+            } catch (Exception e) {
+                Log.d(TAG, "deactivate_mock_location exception: " + Log.getStackTraceString(e));
+            }
+        }
+    }
+
+    static boolean g_mock_location_active = false;
+
+    private boolean is_mock_location_active() {
+        return g_mock_location_active;
     }
 
 
@@ -516,13 +625,14 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
             "GL"
     };
 
+    double DEFAULT_CEP = 4.0;
     double DEFAULT_UBLOX_M8030_CEP = 2.0;
     double DEFAULT_UBLOX_ZED_F9P_CEP = 1.5;
 
     public double get_connected_device_CEP()
     {
         //TODO - later set per detected device or adjustable by user in settings
-        return DEFAULT_UBLOX_M8030_CEP;
+        return DEFAULT_CEP;
     }
 
     @Override
@@ -616,7 +726,6 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
     public void onDestroy() {
         Log.d(TAG, "onDestroy()");
         boolean was_connected = close();
-
-        Toast.makeText(this, "Stopped Bluetooth GNSS Service...", Toast.LENGTH_SHORT).show();
+        toast("Stopped Bluetooth GNSS Service...");
     }
 }
