@@ -138,8 +138,11 @@ public class inputstream_to_queue_reader_thread extends Thread implements Closea
 
                     if (readline_mode)
                         m_readline_cb.on_readline(cb_read_buff); //if buffer is full then this thread will end and exception logged, conn closed so conn watcher would trigger disconnected stage so user would know somethings wrong anyway...
-                    else
-                        m_read_buff_cb.on_read(cb_read_buff);
+                    else {
+                        if (m_read_buff_cb != null) {
+                            m_read_buff_cb.on_read(cb_read_buff);
+                        }
+                    }
 
 
                 } else {

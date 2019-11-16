@@ -45,7 +45,7 @@ public class ntrip_conn_mgr {
     String m_pass;
     String m_mount_point;
 
-    ntrip_conn_mgr(String tcp_server_host, final int tcp_server_port, String mount_point, String user, String pass, ntrip_conn_callbacks cb) throws Exception
+    public ntrip_conn_mgr(String tcp_server_host, final int tcp_server_port, String mount_point, String user, String pass, ntrip_conn_callbacks cb) throws Exception
     {
         m_cb = cb;
 
@@ -103,7 +103,9 @@ public class ntrip_conn_mgr {
             if (!m_tcp_server_sock.isConnected())
                 throw new Exception("connect failed");
             try {
-                m_cb.on_target_tcp_connected();
+                if (m_cb != null) {
+                    m_cb.on_target_tcp_connected();
+                }
             } catch (Exception e) {
                 Log.d(TAG, "callback on_tcp_connected exception: "+Log.getStackTraceString(e));
             }
@@ -265,6 +267,14 @@ public class ntrip_conn_mgr {
             sb.append(line);
         }
         return sb.toString();
+    }
+
+    public boolean is_connected()
+    {
+        if (closed) {
+            return false;
+        }
+        return (m_conn_state_watcher != null && m_conn_state_watcher.isAlive() && m_tcp_server_sock != null && m_tcp_server_sock.isConnected());
     }
 
 

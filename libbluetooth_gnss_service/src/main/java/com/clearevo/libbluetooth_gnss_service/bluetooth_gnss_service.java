@@ -56,10 +56,13 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
     int m_icon_id;
     int m_ntrip_cb_count;
     int m_ntrip_cb_count_added_to_send_buffer;
+    Intent m_start_intent;
 
     boolean m_ubx_mode = true;
     boolean m_ubx_send_enable_extra_used_packets = true;
     boolean m_ubx_send_disable_extra_used_packets = false;
+
+    public static final String[] REQUIRED_INTENT_EXTRA_PARAM_KEYS = {"ntrip_host", "ntrip_port", "ntrip_mountpoint", "ntrip_user", "ntrip_pass"};
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
@@ -72,6 +75,7 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
                 m_secure_rfcomm = intent.getBooleanExtra("secure", true);
                 m_auto_reconnect = intent.getBooleanExtra("reconnect", false);
                 String cn = intent.getStringExtra("activity_class_name");
+                m_start_intent = intent;
                 if (cn == null) {
                     throw new Exception("activity_class_name not specified");
                 }
@@ -91,11 +95,36 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
                     if (start_ret == 0) {
                         start_foreground("Connecting...", "target device: " + m_bdaddr, "");
                     }
+
+                    boolean all_ntrip_params_specified = true;
+                    for (String key : REQUIRED_INTENT_EXTRA_PARAM_KEYS) {
+                        if (m_start_intent.getStringExtra(key) == null) {
+                            Log.d(TAG, "key: "+key+"got null so all_ntrip_params_specified false");
+                            all_ntrip_params_specified = false;
+                            break;
+                        }
+                    }
+                    Log.d(TAG, "all_ntrip_params_specified: "+all_ntrip_params_specified);
+
+                    if (all_ntrip_params_specified) {
+                        Log.d(TAG, "call connect_ntrip() since all_ntrip_params_specified true");
+                        int port = -1;
+                        try {
+                            port = Integer.parseInt(m_start_intent.getStringExtra("ntrip_port"));
+                            connect_ntrip(m_start_intent.getStringExtra("ntrip_host"), port, m_start_intent.getStringExtra("ntrip_mountpoint"), m_start_intent.getStringExtra("ntrip_user"), m_start_intent.getStringExtra("ntrip_pass"));
+                        } catch (Exception e) {
+                            Log.d(TAG, "call connect_ntrip exception: "+Log.getStackTraceString(e));
+                        }
+                    } else {
+                        Log.d(TAG, "dont call connect_ntrip() since all_ntrip_params_specified false");
+                    }
+
                 }
             } catch (Exception e) {
                 String msg = "bluetooth_gnss_service: startservice: parse intent failed - cannot start... - exception: "+Log.getStackTraceString(e);
                 Log.d(TAG, msg);
             }
+
         } else {
             String msg = "bluetooth_gnss_service: startservice: null intent - cannot start...";
             Log.d(TAG, msg);
@@ -112,7 +141,6 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
         }
         return false;
     }
-
 
     public boolean is_conn_thread_alive() {
         return m_connecting_thread != null && m_connecting_thread.isAlive();
@@ -226,22 +254,40 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
     }
 
 
-    /* TODO
-    public int connect_ntrip()
+    public int connect_ntrip(String host, int port, String first_mount_point, String user, String pass)
     {
+        m_ntrip_conn_mgr = null;
+        try {
+            m_ntrip_conn_mgr = new ntrip_conn_mgr(host, port, first_mount_point, user, pass, this);
 
-	m_ntrip_conn_mgr = null;
-	try {
-	    m_ntrip_conn_mgr = new ntrip_conn_mgr(host, port, first_mount_point, user, pass, this);
-	    m_ntrip_conn_mgr.connect();
-	    return 0;
-	} catch (Exception e) {
-	    Log.d(TAG, "connect_ntrip exception: "+Log.getStackTraceString(e));
-	    m_ntrip_conn_mgr = null;
-	}
+            //need new thread here else will fail network on mainthread below...
+            new Thread() {
+                public void run()
+                {
+                    try {
+                        m_ntrip_conn_mgr.connect();
+                    } catch (Exception e) {
+                        Log.d(TAG, "m_ntrip_conn_mgr.conenct() exception: "+Log.getStackTraceString(e));
+                    }
+                }
+            }.start();
 
+            return 0;
+        } catch (Exception e) {
+            Log.d(TAG, "connect_ntrip exception: "+Log.getStackTraceString(e));
+            m_ntrip_conn_mgr = null;
+        }
+        return -1;
     }
-     */
+
+    public boolean is_ntrip_connected()
+    {
+        if (m_ntrip_conn_mgr != null && m_ntrip_conn_mgr.is_connected()) {
+            return true;
+        }
+        return false;
+    }
+
 
     @Override //ntrip data callbacks
     public void on_read(byte[] read_buff) {
@@ -639,53 +685,50 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
     public void on_updated_nmea_params(HashMap<String, Object> params_map) {
 
         //try set_mock
+        double lat, lon, alt, hdop;
+        for (String talker : GGA_MESSAGE_TALKER_TRY_LIST) {
 
-
-            double lat, lon, alt, hdop;
-
-            for (String talker : GGA_MESSAGE_TALKER_TRY_LIST) {
-
-                try {
-                    if (params_map.containsKey(talker+"_lat_ts")) {
-                        long new_ts = (long) params_map.get(talker+"_lat_ts");
-                        if (new_ts != last_set_mock_location_ts) {
-                            lat = (double) params_map.get(talker+"_lat");
-                            lon = (double) params_map.get(talker+"_lon");
-                            alt = (double) params_map.get(talker+"_alt");
-                            hdop = (double) params_map.get(talker+"_hdop");
-                            double accuracy = -1.0;
-                            if (params_map.containsKey("UBX_POSITION_hAcc")) {
-                                try {
-                                    accuracy = Double.parseDouble((String) params_map.get("UBX_POSITION_hAcc"));
-                                } catch (Exception e) {}
-                            }
-
-                            //if not ubx or ubx conv failed...
-                            if (accuracy == -1.0) {
-
-                                accuracy = hdop * get_connected_device_CEP();
-                            }
-                            setMock(lat, lon, alt, (float) accuracy);
-                            m_gnss_parser.put_param("", "lat", lat);
-                            m_gnss_parser.put_param("", "lon", lon);
-                            m_gnss_parser.put_param("", "alt", alt);
-                            m_gnss_parser.put_param("", "hdop", hdop);
-                            m_gnss_parser.put_param("", "accuracy", accuracy);
-                            m_gnss_parser.put_param("", "location_from_talker", talker);
-                            m_gnss_parser.put_param("", "mock_location_set_ts", System.currentTimeMillis());
-
-                            break;
-                        } else {
-                            //omit as same ts as last
+            try {
+                if (params_map.containsKey(talker+"_lat_ts")) {
+                    long new_ts = (long) params_map.get(talker+"_lat_ts");
+                    if (new_ts != last_set_mock_location_ts) {
+                        lat = (double) params_map.get(talker+"_lat");
+                        lon = (double) params_map.get(talker+"_lon");
+                        alt = (double) params_map.get(talker+"_alt");
+                        hdop = (double) params_map.get(talker+"_hdop");
+                        double accuracy = -1.0;
+                        if (params_map.containsKey("UBX_POSITION_hAcc")) {
+                            try {
+                                accuracy = Double.parseDouble((String) params_map.get("UBX_POSITION_hAcc"));
+                            } catch (Exception e) {}
                         }
+
+                        //if not ubx or ubx conv failed...
+                        if (accuracy == -1.0) {
+
+                            accuracy = hdop * get_connected_device_CEP();
+                        }
+                        setMock(lat, lon, alt, (float) accuracy);
+                        m_gnss_parser.put_param("", "lat", lat);
+                        m_gnss_parser.put_param("", "lon", lon);
+                        m_gnss_parser.put_param("", "alt", alt);
+                        m_gnss_parser.put_param("", "hdop", hdop);
+                        m_gnss_parser.put_param("", "accuracy", accuracy);
+                        m_gnss_parser.put_param("", "location_from_talker", talker);
+                        m_gnss_parser.put_param("", "mock_location_set_ts", System.currentTimeMillis());
+
+                        break;
+                    } else {
+                        //omit as same ts as last
                     }
-                } catch (Exception e) {
-                    Log.d(TAG, "bluetooth_gnss_service on_updated_nmea_params exception: "+Log.getStackTraceString(e));
                 }
+            } catch (Exception e) {
+                Log.d(TAG, "bluetooth_gnss_service on_updated_nmea_params exception: "+Log.getStackTraceString(e));
             }
+        }
 
 
-        //report to activity
+        //report params to activity
         try {
             if (m_activity_for_nmea_param_callbacks != null) {
                 m_activity_for_nmea_param_callbacks.on_updated_nmea_params(params_map);
