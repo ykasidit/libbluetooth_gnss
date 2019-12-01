@@ -125,7 +125,7 @@ public class ntrip_conn_mgr {
             m_sock_os.write(request_msg.getBytes("ascii"));
 
             //read HTTP Response header
-            ArrayList<String> http_response_header_lines = read_is_get_lines_until(m_sock_is, HTTP_RESPONSE_HEADER_END_FLAG, MAX_HTTP_HEADER_LINES, HTTP_HEADER_READ_TIMEOUT_MILLIS);
+            ArrayList<String> http_response_header_lines = read_is_get_lines_until(m_sock_is, HTTP_RESPONSE_HEADER_END_FLAG, MAX_HTTP_HEADER_LINES, HTTP_HEADER_READ_TIMEOUT_MILLIS, "OK");
             if (http_response_header_lines.size() ==  0) {
                 throw new Exception("failed to read http response header...");
             }
@@ -136,7 +136,7 @@ public class ntrip_conn_mgr {
             String resp_header_first_line = http_response_header_lines.get(0);
 
             //handle the read http response headers...
-            boolean resp_header_first_line_says_ok = resp_header_first_line.contains(HTTP_200_OK_STR);
+            boolean resp_header_first_line_says_ok = resp_header_first_line.contains(HTTP_200_OK_STR) || resp_header_first_line.contains(ICY_STR);
             if (resp_header_first_line_says_ok) {
                 Log.d(TAG, "resp_header_first_line_says_ok");
             } else {
@@ -151,7 +151,7 @@ public class ntrip_conn_mgr {
                 if (!resp_header_first_line.contains(SOURCETABLE_STR))
                     throw new Exception("get_mount_point_list failed as server resp_header_first_line as does not contain: ["+SOURCETABLE_STR+"] - resp_header_first_line: " + resp_header_first_line);
 
-                ArrayList<String> sourcetable_lines = read_is_get_lines_until(m_sock_is, END_SOURCETABLE_STR, MAX_SOURCETABLE_LINES, SOURCETABLE_READ_TIMEOUT_MILLIS);
+                ArrayList<String> sourcetable_lines = read_is_get_lines_until(m_sock_is, END_SOURCETABLE_STR, MAX_SOURCETABLE_LINES, SOURCETABLE_READ_TIMEOUT_MILLIS, "OK");
                 return sourcetable_lines;
 
             } else {
@@ -238,14 +238,19 @@ public class ntrip_conn_mgr {
         return request_msg;
     }
 
-    public static ArrayList<String> read_is_get_lines_until(InputStream is, String end_flag, int max_lines_throw_thereafter, int timeout_millis) throws Exception
+    public static ArrayList<String> read_is_get_lines_until(InputStream is, String end_flag, int max_lines_throw_thereafter, int timeout_millis, String alt0_end_resp_line_with_flag) throws Exception
     {
         byte[] tmp_read_buf = new byte[inputstream_to_queue_reader_thread.MAX_READ_BUF_SIZE];
         ArrayList<String> lines = new ArrayList<String>();
         byte[] resp_line_bytes = null;
         while ((resp_line_bytes = inputstream_to_queue_reader_thread.bytes_readline(is, tmp_read_buf)) != null) {
             String read_line = new String(resp_line_bytes, "ascii");
-            //Log.d(TAG, "read_line: "+read_line+" end_flag: "+end_flag);
+            Log.d(TAG, "read_is_get_lines_until: "+read_line+" end_flag: "+end_flag);
+
+            if ((alt0_end_resp_line_with_flag != null && read_line.contains(alt0_end_resp_line_with_flag))) {
+                lines.add(read_line);
+                break;
+            }
 
             if (read_line.equals(end_flag)) {
                 break;
@@ -274,12 +279,22 @@ public class ntrip_conn_mgr {
         if (closed) {
             return false;
         }
-        return (m_conn_state_watcher != null && m_conn_state_watcher.isAlive() && m_tcp_server_sock != null && m_tcp_server_sock.isConnected());
+        Log.d(TAG, "is_connected() m_conn_state_watcher: "+m_conn_state_watcher);
+        Log.d(TAG, "is_connected() m_tcp_server_sock: "+m_tcp_server_sock);
+        if (m_tcp_server_sock != null) {
+            Log.d(TAG, "is_connected() m_tcp_server_sock.isConnected(): "+m_tcp_server_sock.isConnected());
+        }
+        if (m_conn_state_watcher != null) {
+            Log.d(TAG, "is_connected() m_conn_state_watcher.isAlive(): "+m_conn_state_watcher.isAlive());
+        }
+        //return (m_conn_state_watcher != null && m_conn_state_watcher.isAlive() && m_tcp_server_sock != null && m_tcp_server_sock.isConnected());
+        return (m_tcp_server_sock != null && m_tcp_server_sock.isConnected());
     }
 
 
     public void close()
     {
+        Log.d(TAG, "close()");
         if (closed)
             return;
 
