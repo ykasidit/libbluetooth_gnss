@@ -15,7 +15,6 @@ import android.location.Criteria;
 import android.os.Binder;
 import android.os.Handler;
 import android.os.IBinder;
-import android.support.v4.app.NotificationCompat;
 import android.util.Log;
 import android.widget.Toast;
 import android.location.LocationManager;
@@ -23,6 +22,7 @@ import android.location.LocationProvider;
 import android.os.Build;
 import android.os.SystemClock;
 import android.location.Location;
+import androidx.core.app.NotificationCompat;
 
 import com.clearevo.libecodroidbluetooth.ntrip_conn_callbacks;
 import com.clearevo.libecodroidbluetooth.ntrip_conn_mgr;
@@ -577,12 +577,11 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
         return mock_enabled;
     }
 
-    private void setMock(double latitude, double longitude, double altitude, float accuracy) {
+
+    private void setMock(double latitude, double longitude, double altitude, float accuracy, float bearing, float speed) {
 
         Log.d(TAG, "setMock accuracy_meters: "+accuracy);
-
         activate_mock_location(); //this will check a static flag and not re-activate if already active
-
         LocationManager locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
 
         Location newLocation = new Location(LocationManager.GPS_PROVIDER);
@@ -591,13 +590,20 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
         newLocation.setAccuracy(accuracy);
         newLocation.setAltitude(altitude);
         newLocation.setAccuracy(accuracy);
+        newLocation.setBearing(bearing);
+        newLocation.setSpeed(speed);
         newLocation.setTime(System.currentTimeMillis());
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
             newLocation.setElapsedRealtimeNanos(SystemClock.elapsedRealtimeNanos());
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O){
+                newLocation.setElapsedRealtimeUncertaintyNanos(10);
+            }
         }
         locationManager.setTestProviderStatus(LocationManager.GPS_PROVIDER,
                 LocationProvider.AVAILABLE,
                 null,System.currentTimeMillis());
+        Log.d(TAG, "setMock lat: "+newLocation.getLatitude());
+        Log.d(TAG, "setMock lon: "+newLocation.getLatitude());
         locationManager.setTestProviderLocation(LocationManager.GPS_PROVIDER, newLocation);
     }
 
@@ -633,11 +639,11 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
                 LocationManager locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
                 locationManager.addTestProvider(LocationManager.GPS_PROVIDER,
                         /*boolean requiresNetwork*/ false,
-                        /*boolean requiresSatellite*/ false,
+                        /*boolean requiresSatellite*/ true,
                         /*boolean requiresCell*/ false,
                         /*boolean hasMonetaryCost*/ false,
                         /*boolean supportsAltitude*/ true,
-                        /*boolean supportsSpeed*/ false,
+                        /*boolean supportsSpeed*/ true,
                         /*boolean supportsBearing */ false,
                         android.location.Criteria.POWER_LOW,
                         android.location.Criteria.ACCURACY_FINE);
@@ -657,6 +663,15 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
                 if (st.contains("already exists")) {
                     Log.d(TAG, "activate_mock_location exception but already exits so set success flag");
                     g_mock_location_active = true;
+                    m_handler.post(
+                            new Runnable() {
+                                @Override
+                                public void run() {
+                                    toast("Activated Mock location provider...");
+                                    updateNotification("Bluetooth GNSS - Active...", "Connected to: "+m_bdaddr, "");
+                                }
+                            }
+                    );
                 }
                 Log.d(TAG, "activate_mock_location exception: " + st);
 
@@ -704,7 +719,7 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
     public void on_updated_nmea_params(HashMap<String, Object> params_map) {
 
         //try set_mock
-        double lat, lon, alt, hdop;
+        double lat = 0.0, lon = 0.0, alt = 0.0, hdop = 0.0, speed = 0.0;
         for (String talker : GGA_MESSAGE_TALKER_TRY_LIST) {
 
             try {
@@ -715,6 +730,8 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
                         lon = (double) params_map.get(talker+"_lon");
                         alt = (double) params_map.get(talker+"_alt");
                         hdop = (double) params_map.get(talker+"_hdop");
+                        speed = (double) params_map.get(talker+"_speed"); //Speed in knots (nautical miles per hour).
+                        speed = speed * 0.514444; //convert to m/s
                         double accuracy = -1.0;
                         if (params_map.containsKey("UBX_POSITION_hAcc")) {
                             try {
@@ -727,7 +744,7 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
 
                             accuracy = hdop * get_connected_device_CEP();
                         }
-                        setMock(lat, lon, alt, (float) accuracy);
+                        setMock(lat, lon, alt, (float) accuracy, 0, (float) speed);
                         m_gnss_parser.put_param("", "lat", lat);
                         m_gnss_parser.put_param("", "lon", lon);
                         m_gnss_parser.put_param("", "alt", alt);
