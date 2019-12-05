@@ -98,8 +98,8 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
 
                     boolean all_ntrip_params_specified = true;
                     for (String key : REQUIRED_INTENT_EXTRA_PARAM_KEYS) {
-                        if (m_start_intent.getStringExtra(key) == null) {
-                            Log.d(TAG, "key: "+key+"got null so all_ntrip_params_specified false");
+                        if (m_start_intent.getStringExtra(key) == null || m_start_intent.getStringExtra(key).length() == 0) {
+                            Log.d(TAG, "key: "+key+"got null or empty string so all_ntrip_params_specified false");
                             all_ntrip_params_specified = false;
                             break;
                         }
@@ -432,7 +432,7 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
     {
 
         try {
-            Log.d(TAG, "rfcomm on_readline: "+new String(readline, "ascii"));
+            //Log.d(TAG, "rfcomm on_readline: "+new String(readline, "ascii"));
             String parsed_nmea = m_gnss_parser.parse(readline);
         } catch (Exception e) {
             Log.d(TAG, "bluetooth_gnss_service on_readline parse exception: "+Log.getStackTraceString(e));
@@ -716,6 +716,7 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
     @Override
     public void on_updated_nmea_params(HashMap<String, Object> params_map) {
 
+        Log.d(TAG, "service: on_updated_nmea_params()");
         //try set_mock
         double lat = 0.0, lon = 0.0, alt = 0.0, hdop = 0.0, speed = 0.0;
         for (String talker : GGA_MESSAGE_TALKER_TRY_LIST) {

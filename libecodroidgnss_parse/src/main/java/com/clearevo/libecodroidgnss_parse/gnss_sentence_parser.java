@@ -228,6 +228,7 @@ public class gnss_sentence_parser {
 
                     //update on RMC
                     if (m_cb != null) {
+                        Log.d(TAG, "calling m_cb callback with parsed params");
                         m_cb.on_updated_nmea_params(m_parsed_params_hashmap);
                     }
                 } else if (sentence instanceof GSASentence) {
