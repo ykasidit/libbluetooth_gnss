@@ -595,9 +595,7 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
         newLocation.setTime(System.currentTimeMillis());
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
             newLocation.setElapsedRealtimeNanos(SystemClock.elapsedRealtimeNanos());
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O){
-                newLocation.setElapsedRealtimeUncertaintyNanos(10);
-            }
+
         }
         locationManager.setTestProviderStatus(LocationManager.GPS_PROVIDER,
                 LocationProvider.AVAILABLE,
