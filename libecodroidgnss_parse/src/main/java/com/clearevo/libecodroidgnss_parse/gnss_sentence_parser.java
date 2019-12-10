@@ -229,7 +229,7 @@ public class gnss_sentence_parser {
                         put_param(talker_id, "mode", rmc.getMode());
                     } catch (Exception pe) {
                         if (pe.toString().contains("No enum constant net.sf.marineapi.nmea.util.FaaMode.F")) {
-
+                            put_param(talker_id, "mode", "FloatRTK");
                         } else {
                             Log.d(TAG, "parse/put rmc nmea: [" + nmea + "] got exception: " + Log.getStackTraceString(pe));
                         }
