@@ -230,6 +230,10 @@ public class gnss_sentence_parser {
                     } catch (Exception pe) {
                         if (pe.toString().contains("No enum constant net.sf.marineapi.nmea.util.FaaMode.F")) {
                             put_param(talker_id, "mode", "FloatRTK");
+                        } else if (pe.toString().contains("No enum constant net.sf.marineapi.nmea.util.FaaMode.R")) {
+                            put_param(talker_id, "mode", "RTK");
+                        } else if (pe.toString().contains("No enum constant net.sf.marineapi.nmea.util.FaaMode.P")) {
+                            put_param(talker_id, "mode", "Precise");
                         } else {
                             Log.d(TAG, "parse/put rmc nmea: [" + nmea + "] got exception: " + Log.getStackTraceString(pe));
                         }
