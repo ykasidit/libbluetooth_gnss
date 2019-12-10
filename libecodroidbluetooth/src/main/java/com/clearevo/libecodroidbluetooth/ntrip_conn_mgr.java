@@ -295,9 +295,6 @@ public class ntrip_conn_mgr {
     public void close()
     {
         Log.d(TAG, "close()");
-        if (closed)
-            return;
-
         closed = true;
 
         if (m_conn_state_watcher != null) {

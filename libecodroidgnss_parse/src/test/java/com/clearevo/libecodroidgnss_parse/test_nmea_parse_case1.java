@@ -24,6 +24,7 @@ public class test_nmea_parse_case1 {
         String[] nmeas = {
                 "$GNGSA,A,3,26,31,10,32,14,16,25,20,18,22,41,,1.34,0.74,1.12*16\n",
                 "$GNGSA,A,3,73,80,70,,,,,,,,,,1.34,0.74,1.12*10",
+                "$GNRMC,020125.00,A,1845.82207,N,09859.94984,E,0.027,,101219,,,F,V*1A"
         };
 
         gnss_sentence_parser parser = new gnss_sentence_parser();

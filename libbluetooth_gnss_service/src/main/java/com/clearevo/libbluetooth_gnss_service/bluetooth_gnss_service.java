@@ -257,7 +257,13 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
     public int connect_ntrip(String host, int port, String first_mount_point, String user, String pass)
     {
         Log.d(TAG, "connect_ntrip set m_ntrip_conn_mgr start");
-        m_ntrip_conn_mgr = null;
+        if (m_ntrip_conn_mgr != null) {
+            try {
+                m_ntrip_conn_mgr.close();
+            } catch (Throwable e) {}
+            m_ntrip_conn_mgr = null;
+        }
+
         try {
             m_ntrip_conn_mgr = new ntrip_conn_mgr(host, port, first_mount_point, user, pass, this);
             Log.d(TAG, "connect_ntrip set m_ntrip_conn_mgr done");
@@ -331,7 +337,7 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
         if (m_ntrip_conn_mgr != null) {
             try {
                 Log.d(TAG, "close() m_ntrip_conn_mgr.close()");
-            m_ntrip_conn_mgr.close();
+                m_ntrip_conn_mgr.close();
             } catch (Exception e) {
             }
         }
@@ -402,6 +408,7 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
                 }
         );
         deactivate_mock_location();
+        close();
     }
 
     public void start_connecting_thread()
@@ -432,7 +439,7 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
     {
 
         try {
-            //Log.d(TAG, "rfcomm on_readline: "+new String(readline, "ascii"));
+            Log.d(TAG, "rfcomm on_readline: "+new String(readline, "ascii"));
             String parsed_nmea = m_gnss_parser.parse(readline);
         } catch (Exception e) {
             Log.d(TAG, "bluetooth_gnss_service on_readline parse exception: "+Log.getStackTraceString(e));

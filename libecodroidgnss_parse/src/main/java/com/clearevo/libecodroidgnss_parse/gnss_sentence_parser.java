@@ -169,33 +169,39 @@ public class gnss_sentence_parser {
                     try {
                         put_param(talker_id, "lat", pos.getLatitude());
                         put_param(talker_id, "lon", pos.getLongitude());
-                    } catch (DataNotAvailableException dae) {
+                    } catch (Exception pe) {
+                        Log.d(TAG, "parse/put gga nmea: [" + nmea + "] got exception: " + Log.getStackTraceString(pe));
                     }
 
                     try {
                         put_param(talker_id, "alt", pos.getAltitude());
-                    } catch (DataNotAvailableException dae) {
+                    } catch (Exception pe) {
+                        Log.d(TAG, "parse/put gga nmea: [" + nmea + "] got exception: " + Log.getStackTraceString(pe));
                     }
 
                     try {
                         put_param(talker_id, "hdop", gga.getHorizontalDOP());
-                    } catch (DataNotAvailableException dae) {
+                    } catch (Exception pe) {
+                        Log.d(TAG, "parse/put gga nmea: [" + nmea + "] got exception: " + Log.getStackTraceString(pe));
                     }
 
                     try {
                         put_param(talker_id, "dgps_age", gga.getDgpsAge());
                         put_param(talker_id, "dgps_station_id", gga.getDgpsStationId());
-                    } catch (DataNotAvailableException dae) {
+                    } catch (Exception pe) {
+                        Log.d(TAG, "parse/put gga nmea: [" + nmea + "] got exception: " + Log.getStackTraceString(pe));
                     }
 
                     try {
                         put_param(talker_id, "fix_quality", gga.getFixQuality().toString());
-                    } catch (DataNotAvailableException dae) {
+                    } catch (Exception pe) {
+                        Log.d(TAG, "parse/put gga nmea: [" + nmea + "] got exception: " + Log.getStackTraceString(pe));
                     }
 
                     try {
                         put_param(talker_id, "datum", pos.getDatum());
-                    } catch (DataNotAvailableException dae) {
+                    } catch (Exception pe) {
+                        Log.d(TAG, "parse/put gga nmea: [" + nmea + "] got exception: " + Log.getStackTraceString(pe));
                     }
 
                 } else if (sentence instanceof RMCSentence) {
@@ -203,27 +209,36 @@ public class gnss_sentence_parser {
 
                     try {
                         put_param(talker_id, "time", rmc.getTime().toISO8601());
-                    } catch (DataNotAvailableException dae) {
+                    } catch (Exception pe) {
+                        Log.d(TAG, "parse/put rmc nmea: [" + nmea + "] got exception: " + Log.getStackTraceString(pe));
                     }
 
                     try {
                         put_param(talker_id, "speed", rmc.getSpeed());
-                    } catch (DataNotAvailableException dae) {
+                    } catch (Exception pe) {
+                        Log.d(TAG, "parse/put rmc nmea: [" + nmea + "] got exception: " + Log.getStackTraceString(pe));
                     }
 
                     try {
                         put_param(talker_id, "course", rmc.getCourse());
-                    } catch (DataNotAvailableException dae) {
+                    } catch (Exception pe) {
+                        Log.d(TAG, "parse/put rmc nmea: [" + nmea + "] got exception: " + Log.getStackTraceString(pe));
                     }
 
                     try {
                         put_param(talker_id, "mode", rmc.getMode());
-                    } catch (DataNotAvailableException dae) {
+                    } catch (Exception pe) {
+                        if (pe.toString().contains("No enum constant net.sf.marineapi.nmea.util.FaaMode.F")) {
+
+                        } else {
+                            Log.d(TAG, "parse/put rmc nmea: [" + nmea + "] got exception: " + Log.getStackTraceString(pe));
+                        }
                     }
 
                     try {
                         put_param(talker_id, "status", rmc.getStatus());
-                    } catch (DataNotAvailableException dae) {
+                    } catch (Exception pe) {
+                        Log.d(TAG, "parse/put rmc nmea: [" + nmea + "] got exception: " + Log.getStackTraceString(pe));
                     }
 
                     //update on RMC
@@ -253,7 +268,8 @@ public class gnss_sentence_parser {
                         }
 
 
-                    } catch (DataNotAvailableException dae) {
+                    } catch (Exception pe) {
+                        Log.d(TAG, "parse/put gsa nmea: [" + nmea + "] got exception: " + Log.getStackTraceString(pe));
                     }
                 } else if (sentence instanceof GSVSentence) {
                     GSVSentence gsv = (GSVSentence) sentence;
@@ -296,7 +312,8 @@ public class gnss_sentence_parser {
                             }
                         }
 
-                    } catch (DataNotAvailableException dae) {
+                    } catch (Exception pe) {
+                        Log.d(TAG, "parse/put gsv nmea: [" + nmea + "] got exception: " + Log.getStackTraceString(pe));
                     }
                 }
             } //else of non-pubx
