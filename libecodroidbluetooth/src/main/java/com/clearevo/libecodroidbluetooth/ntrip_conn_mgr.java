@@ -76,6 +76,11 @@ public class ntrip_conn_mgr {
         connect_or_get_mount_point_list(false);
     }
 
+    public void send_buff_to_server(byte[] buff) throws Exception
+    {
+        m_sock_os.write(buff);
+    }
+
     public ArrayList<String> connect_or_get_mount_point_list(boolean get_mount_point_list) throws Exception
     {
         Log.d(TAG, "connect() start");
@@ -288,7 +293,7 @@ public class ntrip_conn_mgr {
             Log.d(TAG, "is_connected() m_conn_state_watcher.isAlive(): "+m_conn_state_watcher.isAlive());
         }
         //return (m_conn_state_watcher != null && m_conn_state_watcher.isAlive() && m_tcp_server_sock != null && m_tcp_server_sock.isConnected());
-        return (m_tcp_server_sock != null && m_tcp_server_sock.isConnected());
+        return (m_tcp_server_sock != null && m_tcp_server_sock.isConnected() && m_conn_state_watcher != null && m_conn_state_watcher.isAlive());
     }
 
 

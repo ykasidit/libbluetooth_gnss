@@ -28,7 +28,7 @@ public class test_nmea_parse {
 
         SentenceFactory sf = SentenceFactory.getInstance();
         GGASentence gga = (GGASentence) sf.createParser(TalkerId.GN, "GGA");
-        Position position = new Position(0.1, -0.2, 0.3);
+        Position position = new Position(15.223850, 104.857898, 0.3); //15.223850, 104.857898
         gga.setPosition(position);
 
         String example_nmea_gga = gga.toSentence();
@@ -140,9 +140,9 @@ public class test_nmea_parse {
         System.out.println("UBX_POSITION_numSvs: "+params.get("UBX_POSITION_numSvs"));
         assertTrue(26 == Integer.parseInt((String) params.get("UBX_POSITION_numSvs")));
 
-        assertTrue(params.get("GN_lat").toString().startsWith("0.1"));
-        assertTrue(params.get("GN_lat_str").toString().startsWith("0.1"));
-        assertTrue(params.get("GN_lon").toString().startsWith("-0.2"));
+        assertTrue(params.get("GN_lat").toString().startsWith("15.2"));
+        assertTrue(params.get("GN_lat_str").toString().startsWith("15.2"));
+        assertTrue(params.get("GN_lon").toString().startsWith("104.8"));
 
 
 

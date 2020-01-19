@@ -74,8 +74,8 @@ public class test_ntrip_conn_mgr implements ntrip_conn_callbacks{
         {
             ArrayList<String> mpl = null;
             ntrip_conn_mgr mgr = null;
-            String[] test_mpl_users = {null, user};
-            String[] test_mpl_passes = {null, pass};
+            String[] test_mpl_users = {user};
+            String[] test_mpl_passes = {pass};
             for (String mpl_user : test_mpl_users)
                 for (String mpl_pass : test_mpl_passes) {
                     try {

@@ -115,8 +115,8 @@ public class Base64 {
      * @throws IllegalArgumentException if the input contains
      * incorrect padding
      */
-    public static byte[] decode(String str, int flags) {
-        return decode(str.getBytes(), flags);
+    public static byte[] decode(String str, int flags) throws Exception {
+        return decode(str.getBytes("ascii"), flags);
     }
 
     /**
