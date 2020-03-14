@@ -121,6 +121,7 @@ public class gnss_sentence_parser {
 
             if (nmea.startsWith("$PUBX")) {
                 //proprietary messages handle here...
+                Log.d(TAG, "got PUBX: "+nmea);
 
                 if (nmea.startsWith("$PUBX,00")) {
                     //ublox 31.3.2 POSITION (PUBX,00) - https://www.u-blox.com/sites/default/files/products/documents/u-blox8-M8_ReceiverDescrProtSpec_%28UBX-13003221%29_Public.pdf
@@ -188,6 +189,8 @@ public class gnss_sentence_parser {
                     try {
                         put_param(talker_id, "dgps_age", gga.getDgpsAge());
                         put_param(talker_id, "dgps_station_id", gga.getDgpsStationId());
+                    } catch (DataNotAvailableException dae) {
+
                     } catch (Exception pe) {
                         Log.d(TAG, "parse/put gga nmea: [" + nmea + "] got exception: " + Log.getStackTraceString(pe));
                     }
@@ -221,6 +224,8 @@ public class gnss_sentence_parser {
 
                     try {
                         put_param(talker_id, "course", rmc.getCourse());
+                    } catch (DataNotAvailableException dae) {
+
                     } catch (Exception pe) {
                         Log.d(TAG, "parse/put rmc nmea: [" + nmea + "] got exception: " + Log.getStackTraceString(pe));
                     }

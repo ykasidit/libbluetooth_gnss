@@ -670,7 +670,7 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
                 LocationProvider.AVAILABLE,
                 null,System.currentTimeMillis());
         Log.d(TAG, "setMock lat: "+newLocation.getLatitude());
-        Log.d(TAG, "setMock lon: "+newLocation.getLatitude());
+        Log.d(TAG, "setMock lon: "+newLocation.getLongitude());
         locationManager.setTestProviderLocation(LocationManager.GPS_PROVIDER, newLocation);
     }
 

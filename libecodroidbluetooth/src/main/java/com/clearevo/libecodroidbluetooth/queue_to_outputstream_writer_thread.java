@@ -33,12 +33,12 @@ public class queue_to_outputstream_writer_thread extends Thread implements Close
 
     public void run()
     {
-        Log.d(TAG, "thread start");
+        Log.d(TAG, "queue_to_outputstream_writer_thread thread start");
         try {
             while (true) {
                 //System.out.println("m_queue poll pre poll");
                 byte[] out_buf = m_queue.poll();
-                //System.out.println("m_queue poll buf:" + out_buf);
+                //Log.d(TAG,"queue_to_outputstream_writer_thread: m_queue poll buf:" + out_buf);
                 if (out_buf != null && out_buf.length > 0) {
                     m_os.write(out_buf);
                 } else {
@@ -47,11 +47,11 @@ public class queue_to_outputstream_writer_thread extends Thread implements Close
             }
         } catch (Exception e) {
             if (m_queue != null) { //dont log exception if close() already
-                Log.d(TAG, "thread ending with exception: " + Log.getStackTraceString(e));
+                Log.d(TAG, "queue_to_outputstream_writer_thread thread ending with exception: " + Log.getStackTraceString(e));
             }
         } finally {
             close();
         }
-        Log.d(TAG, "thread ended");
+        Log.d(TAG, "queue_to_outputstream_writer_thread thread ended");
     }
 }
