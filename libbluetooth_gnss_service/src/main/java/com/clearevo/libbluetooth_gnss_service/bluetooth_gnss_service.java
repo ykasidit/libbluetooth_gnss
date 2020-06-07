@@ -659,7 +659,11 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
         newLocation.setAccuracy(accuracy);
         newLocation.setAltitude(altitude);
         newLocation.setAccuracy(accuracy);
-        newLocation.setBearing(bearing);
+        if (!Double.isNaN(bearing))
+            newLocation.setBearing(bearing);
+        else {
+            //Log.d(TAG, "bearing is nan so not setting in newlocation");
+        }
         newLocation.setSpeed(speed);
         newLocation.setTime(System.currentTimeMillis());
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
@@ -787,7 +791,7 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
 
         Log.d(TAG, "service: on_updated_nmea_params()");
         //try set_mock
-        double lat = 0.0, lon = 0.0, alt = 0.0, hdop = 0.0, speed = 0.0;
+        double lat = 0.0, lon = 0.0, alt = 0.0, hdop = 0.0, speed = 0.0, bearing = 0.0/0.0;
         for (String talker : GGA_MESSAGE_TALKER_TRY_LIST) {
 
             try {
@@ -800,6 +804,15 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
                         hdop = (double) params_map.get(talker+"_hdop");
                         speed = (double) params_map.get(talker+"_speed"); //Speed in knots (nautical miles per hour).
                         speed = speed * 0.514444; //convert to m/s
+                        try {
+                            Object course = params_map.get(talker+"_true_course");
+                            Log.d(TAG, "course: "+course);
+                            if (course != null) {
+                                bearing = (double) course;
+                            }
+                        } catch (Exception e) {
+                            Log.d(TAG, "get course failed exception: "+Log.getStackTraceString(e));
+                        }
                         double accuracy = -1.0;
                         if (params_map.containsKey("UBX_POSITION_hAcc")) {
                             try {
@@ -812,7 +825,7 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
 
                             accuracy = hdop * get_connected_device_CEP();
                         }
-                        setMock(lat, lon, alt, (float) accuracy, 0, (float) speed);
+                        setMock(lat, lon, alt, (float) accuracy, (float) bearing, (float) speed);
                         m_gnss_parser.put_param("", "lat", lat);
                         m_gnss_parser.put_param("", "lon", lon);
                         m_gnss_parser.put_param("", "alt", alt);

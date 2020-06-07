@@ -10,6 +10,7 @@ import net.sf.marineapi.nmea.sentence.GSVSentence;
 import net.sf.marineapi.nmea.sentence.RMCSentence;
 import net.sf.marineapi.nmea.sentence.Sentence;
 import net.sf.marineapi.nmea.sentence.TalkerId;
+import net.sf.marineapi.nmea.sentence.VTGSentence;
 import net.sf.marineapi.nmea.util.Position;
 import net.sf.marineapi.nmea.util.SatelliteInfo;
 
@@ -225,7 +226,6 @@ public class gnss_sentence_parser {
                     try {
                         put_param(talker_id, "course", rmc.getCourse());
                     } catch (DataNotAvailableException dae) {
-
                     } catch (Exception pe) {
                         Log.d(TAG, "parse/put rmc nmea: [" + nmea + "] got exception: " + Log.getStackTraceString(pe));
                     }
@@ -323,6 +323,20 @@ public class gnss_sentence_parser {
 
                     } catch (Exception pe) {
                         Log.d(TAG, "parse/put gsv nmea: [" + nmea + "] got exception: " + Log.getStackTraceString(pe));
+                    }
+                } else if (sentence instanceof VTGSentence) {
+                    VTGSentence vtg = (VTGSentence) sentence;
+                    try {
+                        put_param(talker_id, "true_course", vtg.getTrueCourse());
+                    } catch (DataNotAvailableException dae) {
+                    } catch (Exception pe) {
+                        Log.d(TAG, "parse/put gsa nmea: [" + nmea + "] got exception: " + Log.getStackTraceString(pe));
+                    }
+                    try {
+                        put_param(talker_id, "magnetic_course", vtg.getMagneticCourse());
+                    } catch (DataNotAvailableException dae) {
+                    } catch (Exception pe) {
+                        Log.d(TAG, "parse/put gsa nmea: [" + nmea + "] got exception: " + Log.getStackTraceString(pe));
                     }
                 }
             } //else of non-pubx
