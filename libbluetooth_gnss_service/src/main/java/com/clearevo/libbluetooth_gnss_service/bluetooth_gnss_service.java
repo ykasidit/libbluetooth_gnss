@@ -12,6 +12,7 @@ import android.bluetooth.BluetoothDevice;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Binder;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.IBinder;
 import android.util.Log;
@@ -29,6 +30,9 @@ import com.clearevo.libecodroidbluetooth.rfcomm_conn_callbacks;
 import com.clearevo.libecodroidbluetooth.rfcomm_conn_mgr;
 import com.clearevo.libecodroidgnss_parse.gnss_sentence_parser;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -66,6 +70,9 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
     long m_last_ntrip_gga_send_ts = 0;
     public static final long SEND_GGA_TO_NTRIP_EVERY_MILLIS = 29*1000;
     public static final String[] REQUIRED_INTENT_EXTRA_PARAM_KEYS = {"ntrip_host", "ntrip_port", "ntrip_mountpoint", "ntrip_user", "ntrip_pass"};
+    boolean m_log_bt_rx = false;
+    boolean m_disable_ntrip = false;
+    FileOutputStream m_log_bt_rx_fos = null;
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
@@ -77,6 +84,11 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
                 m_bdaddr = intent.getStringExtra("bdaddr");
                 m_secure_rfcomm = intent.getBooleanExtra("secure", true);
                 m_auto_reconnect = intent.getBooleanExtra("reconnect", false);
+                m_log_bt_rx = intent.getBooleanExtra("log_bt_rx", false);
+                m_disable_ntrip = intent.getBooleanExtra("disable_ntrip", false);
+                Log.d(TAG, "m_secure_rfcomm: "+m_secure_rfcomm);
+                Log.d(TAG, "m_log_bt_rx: "+m_log_bt_rx);
+                Log.d(TAG, "m_disable_ntrip: "+m_disable_ntrip);
                 String cn = intent.getStringExtra("activity_class_name");
                 m_start_intent = intent;
                 if (cn == null) {
@@ -129,6 +141,10 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
             return;
         }
 
+        if (m_disable_ntrip) {
+            return;
+        }
+
         if (is_trying_ntrip_connect()) {
             Log.d(TAG, "start_ntrip_conn_if_specified - ntrip already is_trying_ntrip_connect - omit this call");
             return;
@@ -140,22 +156,27 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
         }
 
         try {
-            if (m_all_ntrip_params_specified) {
-                Log.d(TAG, "start_ntrip_conn_if_specified call connect_ntrip() since m_all_ntrip_params_specified true");
-                int port = -1;
-                try {
-                    port = Integer.parseInt(m_start_intent.getStringExtra("ntrip_port"));
-                    connect_ntrip(m_start_intent.getStringExtra("ntrip_host"), port, m_start_intent.getStringExtra("ntrip_mountpoint"), m_start_intent.getStringExtra("ntrip_user"), m_start_intent.getStringExtra("ntrip_pass"));
-                } catch (Exception e) {
-                    Log.d(TAG, "call connect_ntrip exception: " + Log.getStackTraceString(e));
+            if (System.currentTimeMillis() - last_ntrip_connect_retry > 10000) {
+                if (m_all_ntrip_params_specified) {
+                    Log.d(TAG, "start_ntrip_conn_if_specified call connect_ntrip() since m_all_ntrip_params_specified true");
+                    int port = -1;
+                    try {
+                        port = Integer.parseInt(m_start_intent.getStringExtra("ntrip_port"));
+                        connect_ntrip(m_start_intent.getStringExtra("ntrip_host"), port, m_start_intent.getStringExtra("ntrip_mountpoint"), m_start_intent.getStringExtra("ntrip_user"), m_start_intent.getStringExtra("ntrip_pass"));
+                    } catch (Exception e) {
+                        Log.d(TAG, "call connect_ntrip exception: " + Log.getStackTraceString(e));
+                    }
+                } else {
+                    Log.d(TAG, "dont call connect_ntrip() since m_all_ntrip_params_specified false");
                 }
-            } else {
-                Log.d(TAG, "dont call connect_ntrip() since m_all_ntrip_params_specified false");
+                last_ntrip_connect_retry = System.currentTimeMillis();
             }
         } catch (Exception e) {
             Log.d(TAG,"start_ntrip_conn_if_specified exception: "+Log.getStackTraceString(e));
         }
     }
+
+    long last_ntrip_connect_retry = 0;
 
     public boolean is_bt_connected()
     {
@@ -313,6 +334,17 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
                         m_ntrip_conn_mgr.connect();
                     } catch (Exception e) {
                         Log.d(TAG, "m_ntrip_conn_mgr.conenct() exception: "+Log.getStackTraceString(e));
+                        final Exception ex = e;
+                        try {
+                            m_handler.post(
+                                    new Runnable() {
+                                        @Override
+                                        public void run() {
+                                            toast_long("NTRIP Connect Failed: "+ex.toString());
+                                        }
+                                    }
+                            );
+                        } catch (Throwable tr) {}
                     }
                 }
             };
@@ -338,7 +370,7 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
     public void on_read(byte[] read_buff) {
 
         try {
-            Log.d(TAG, "ntrip on_read: "+read_buff.toString());
+            //Log.d(TAG, "ntrip on_read: "+read_buff.toString());
             m_ntrip_cb_count += 1;
             g_rfcomm_mgr.add_send_buffer(read_buff);
 	    m_ntrip_cb_count_added_to_send_buffer += 1;
@@ -382,6 +414,13 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
         m_ntrip_cb_count = 0;
         m_ntrip_cb_count_added_to_send_buffer = 0;
 
+        try {
+            if (m_log_bt_rx_fos != null) {
+                m_log_bt_rx_fos.close();
+                m_log_bt_rx_fos = null;
+            }
+        } catch (Exception e) {}
+
         return was_connected;
     }
 
@@ -391,6 +430,23 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
         if (m_is_bound) {
             try {
                 Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
+            } catch (Exception e) {
+                Log.d(TAG, "toast() exception: "+Log.getStackTraceString(e));
+            }
+            Log.d(TAG, "toast msg: "+msg);
+        } else {
+            Log.d(TAG, "m_is_bound false so omit: toast msg: "+msg);
+        }
+
+
+    }
+
+    void toast_long(String msg)
+    {
+        //dont toast if running in background
+        if (m_is_bound) {
+            try {
+                Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
             } catch (Exception e) {
                 Log.d(TAG, "toast() exception: "+Log.getStackTraceString(e));
             }
@@ -473,10 +529,38 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
         m_connecting_thread.start();
     }
 
+    SimpleDateFormat log_name_sdf = new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss");
+    public void log_bt_rx(byte[] read_buf)
+    {
+        try {
+            if (m_log_bt_rx && read_buf != null) {
+                if (m_log_bt_rx_fos == null) {
+                    File storage_fp = Environment.getExternalStorageDirectory();
+                    File logs_folder = new File(storage_fp, "bluetooth_gnss_logs");
+                    Log.d(TAG, "log_bt_rx logs_folder: "+logs_folder);
+                    if (!logs_folder.exists()) {
+                        boolean ret = logs_folder.mkdirs();
+                        Log.d(TAG, "mkdir ret: "+ret);
+                    }
+                    String fn = log_name_sdf.format(new Date())+".log";
+                    File log_fp = new File(logs_folder, fn);
+                    Log.d(TAG, "log_bt_rx log_fp: "+log_fp.getAbsolutePath());
+                    m_log_bt_rx_fos = new FileOutputStream(log_fp);
+                }
+                if (m_log_bt_rx_fos != null) {
+                    m_log_bt_rx_fos.write(read_buf);
+                }
+            }
+        } catch (Throwable tr) {
+            Log.d(TAG, "log_bt_rx exception: "+Log.getStackTraceString(tr));
+        }
+    }
+
     public void on_readline(byte[] readline)
     {
         try {
             //Log.d(TAG, "rfcomm on_readline: "+new String(readline, "ascii"));
+            log_bt_rx(readline);
             String parsed_nmea = m_gnss_parser.parse(readline);
             if (parsed_nmea != null && parsed_nmea.length() > 6 && parsed_nmea.substring(3).startsWith("GGA")) {
 
@@ -549,7 +633,6 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
     void start_foreground(String title, String text, String ticker)
     {
         Log.d(TAG, "start_forgroud 0");
-
         startForeground(1, getMyActivityNotification(title, text, ticker));
         Log.d(TAG, "start_forgroud end");
     }
