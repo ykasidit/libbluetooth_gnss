@@ -4,11 +4,12 @@ import android.content.Context;
 import android.content.Intent;
 import android.support.test.InstrumentationRegistry;
 import android.support.test.runner.AndroidJUnit4;
+import android.util.Log;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
 
 /**
  * Instrumented test, which will execute on an Android device.
@@ -16,16 +17,26 @@ import static org.junit.Assert.*;
  * @see <a href="http://d.android.com/tools/testing">Testing documentation</a>
  */
 @RunWith(AndroidJUnit4.class)
-public class test_start_service {
+public class test_start_service_ble_gap_scan_mode {
+
+    static final String TAG = "btgnss_service";
+
     @Test
-    public void useAppContext() {
+    public void useAppContext() throws Exception {
         // Context of the app under test.
         Context appContext = InstrumentationRegistry.getTargetContext();
         assertEquals("com.clearevo.libbluetooth_gnss_service.test", appContext.getPackageName());
 
+        Log.d(TAG,"start test: "+this.getClass().getSimpleName());
+
         Intent intent = new Intent(appContext, bluetooth_gnss_service.class);
-        intent.putExtra("bdaddr", "DD:DD:DD:DD:DD:DD");
+        intent.putExtra("ble_gap_scan_mode", true);
+        intent.putExtra("ble_gap_scan_enable", true);
         appContext.startService(intent);
+
+        while (true) {
+            Thread.sleep(1000);
+        }
 
     }
 }
