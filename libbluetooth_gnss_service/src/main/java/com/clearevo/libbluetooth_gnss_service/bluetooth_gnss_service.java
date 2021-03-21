@@ -14,8 +14,10 @@ import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothManager;
 import android.bluetooth.le.BluetoothLeScanner;
 import android.bluetooth.le.ScanCallback;
+import android.bluetooth.le.ScanFilter;
 import android.bluetooth.le.ScanRecord;
 import android.bluetooth.le.ScanResult;
+import android.bluetooth.le.ScanSettings;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
@@ -24,6 +26,7 @@ import android.os.Binder;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.IBinder;
+import android.os.ParcelUuid;
 import android.util.Log;
 import android.widget.Toast;
 import android.location.LocationManager;
@@ -44,6 +47,7 @@ import com.clearevo.libecodroidgnss_parse.gnss_sentence_parser;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
@@ -56,6 +60,12 @@ import static com.clearevo.libecodroidgnss_parse.gnss_sentence_parser.toHexStrin
 public class bluetooth_gnss_service extends Service implements rfcomm_conn_callbacks, gnss_sentence_parser.gnss_parser_callbacks, ntrip_conn_callbacks {
 
     static final String TAG = "btgnss_service";
+    static final long BLE_GAP_SCAN_LOOP_DURAITON_MILLIS = 3000;
+    String ECODROIDGPS_BROADCAST_MODE = "ECODROIDGPS_BROADCAST";
+    public static final String BLE_GAP_SCAN_MODE = "ble_gap_scan_mode";
+    public static final ParcelUuid eddystone_service_uuid = ParcelUuid.fromString("0000feaa-0000-1000-8000-00805f9b34fb");  //https://proandroiddev.com/scanning-google-eddystone-in-android-application-cf181e0a8648
+    public static final long BLE_GAP_SCAN_MODE_SETMOCK_INTERVAL = 1000;
+    public long m_last_BLE_GAP_SCAN_MODE_SETMOCK_ts = 0;
 
     rfcomm_conn_mgr g_rfcomm_mgr = null;
     ntrip_conn_mgr m_ntrip_conn_mgr = null;
@@ -96,7 +106,7 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
 
         if (intent != null) {
             try {
-                m_ble_gap_scan_mode = intent.getBooleanExtra("ble_gap_scan_mode", false);
+                m_ble_gap_scan_mode = intent.getBooleanExtra(BLE_GAP_SCAN_MODE, false);
                 m_ble_gap_scan_enable = intent.getBooleanExtra("ble_gap_scan_enable", false);
                 if (m_ble_gap_scan_mode) {
                     Log.d(TAG, "onStartCommand m_ble_gap_scan_mode "+m_ble_gap_scan_mode+" m_ble_gap_scan_enable "+m_ble_gap_scan_enable);
@@ -176,11 +186,58 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
             byte[] scan_record_bytes = null;
             ScanRecord scanRecord = result.getScanRecord();
             scan_record_bytes = scanRecord.getBytes();
-            if (scan_record_bytes == null)
+            if (scan_record_bytes == null) {
                 scan_record_bytes = new byte[0];
+            }
             Log.d(TAG, "onScanResult Device Name: " + result.getDevice().getName() + " rssi: " + result.getRssi() + " scanrecord bytes: " + toHexString(scan_record_bytes) );
+            parse_scan_record_bytes_and_set_location(scan_record_bytes);
         }
     };
+
+
+    public void parse_scan_record_bytes_and_set_location(byte[] gap_buffer)
+    {
+        long now = System.currentTimeMillis();
+
+        //handle system time change
+        if (m_last_BLE_GAP_SCAN_MODE_SETMOCK_ts != 0) {
+            if (now < m_last_BLE_GAP_SCAN_MODE_SETMOCK_ts || now > (m_last_BLE_GAP_SCAN_MODE_SETMOCK_ts + 2 * BLE_GAP_SCAN_MODE_SETMOCK_INTERVAL)) {
+                m_last_BLE_GAP_SCAN_MODE_SETMOCK_ts = 0;
+            }
+        }
+
+        if (now - m_last_BLE_GAP_SCAN_MODE_SETMOCK_ts > BLE_GAP_SCAN_MODE_SETMOCK_INTERVAL) {
+            m_last_BLE_GAP_SCAN_MODE_SETMOCK_ts = now;//ok
+        } else {
+            return; //dont parse/announce locaiton yet
+        }
+        try {
+            ecodroidgps_gap_buffer_parser.ecodroidgps_broadcasted_location loc = ecodroidgps_gap_buffer_parser.parse(gap_buffer);
+            Log.d(TAG, "ECODROIDGPS_BROADCAST_MODE got broadcast: lat: "+loc.lat+" lon: "+loc.lon+" timestamp: "+loc.timestamp);
+            HashMap<String, Object> params_map = new HashMap<String, Object>();
+            String talker = ECODROIDGPS_BROADCAST_MODE;
+            params_map.put("mode", ECODROIDGPS_BROADCAST_MODE);
+            params_map.put(talker+"_timestamp", (double) loc.timestamp);
+            params_map.put(talker+"_timestamp_ts", now);
+            params_map.put(talker+"_lat", (double) loc.lat);
+            params_map.put(talker+"_lat", (double) loc.lat);
+            params_map.put(talker+"_lon", (double) loc.lon);
+            params_map.put(talker+"_lat_ts", now);
+            params_map.put(talker+"_lon_ts", now);
+            try {
+                if (m_activity_for_nmea_param_callbacks != null) {
+                    m_activity_for_nmea_param_callbacks.on_updated_nmea_params(params_map);
+                }
+            } catch (Exception e) {
+                Log.d(TAG, "bluetooth_gnss_service call callback in m_activity_for_nmea_param_callbacks exception: "+Log.getStackTraceString(e));
+            }
+            double lat = loc.lat, lon = loc.lon, alt = 0.0, hdop = 0.0, speed = 0.0, bearing = 0.0/0.0;
+            double accuracy = hdop * get_connected_device_CEP();
+            setMock(lat, lon, alt, (float) accuracy, (float) bearing, (float) speed);
+        } catch (Throwable tr) {
+            Log.d(TAG, "parse_scan_record_bytes_and_set_location exception: "+Log.getStackTraceString(tr));
+        }
+    }
 
     public void handle_ble_gap_scan_enable_changed() {
         Log.d(TAG, "handle_ble_gap_scan_enable_changed() m_ble_gap_scan_enable "+ m_ble_gap_scan_enable);
@@ -198,6 +255,15 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
                             //credit to https://github.com/joelwass/Android-BLE-Scan-Example/blob/master/app/src/main/java/com/example/joelwasserman/androidbletutorial/MainActivity.java
                             BluetoothManager btManager = (BluetoothManager)getSystemService(Context.BLUETOOTH_SERVICE);
                             BluetoothAdapter btAdapter = btManager.getAdapter();
+                            List<ScanFilter> filters = new ArrayList<>();
+                            filters.add(
+                                    new ScanFilter.Builder()
+                                            .setServiceUuid(eddystone_service_uuid)
+                                            .build());
+                            ScanSettings settings = new ScanSettings.Builder()
+                                    .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+                                    .build();
+
                             btLeScanner = btAdapter.getBluetoothLeScanner();
 
                             check_bt_enabled_and_permissions();
@@ -205,9 +271,9 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
 
                             while (ble_gap_scan_thread == this) {
                                 Log.d(TAG, "btLeScanner.startScan(leScanCallback); START");
-                                btLeScanner.startScan(leScanCallback); //TODO set scanfilter to work even when screen is off: https://developer.android.com/reference/android/bluetooth/le/ScanFilter
+                                btLeScanner.startScan(filters, settings, leScanCallback);
                                 Log.d(TAG, "btLeScanner.startScan(leScanCallback); DONE");
-                                Thread.sleep(5*1000);
+                                Thread.sleep(BLE_GAP_SCAN_LOOP_DURAITON_MILLIS);
                             }
                         } catch (Throwable tr) {
                             Log.d(TAG, "ble_gap_scan_thread hash "+this.hashCode()+ " failed with exception: "+Log.getStackTraceString(tr));
@@ -240,6 +306,7 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
                         @Override
                         public void run() {
                             Intent enableIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
+                            enableIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                             getApplicationContext().startActivity(enableIntent);
                         }
                     }

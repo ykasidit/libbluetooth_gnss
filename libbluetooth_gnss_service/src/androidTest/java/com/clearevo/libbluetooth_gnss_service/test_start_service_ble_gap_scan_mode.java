@@ -34,9 +34,13 @@ public class test_start_service_ble_gap_scan_mode {
         intent.putExtra("ble_gap_scan_enable", true);
         appContext.startService(intent);
 
-        while (true) {
+        int n_rounds = 10;
+        for (int i = 0; i < n_rounds; i++) {
             Thread.sleep(1000);
         }
+        appContext.stopService(intent);
+
+        Thread.sleep(5000);
 
     }
 }
