@@ -45,7 +45,21 @@ public class ecodroidgps_gap_buffer_parser {
             throw new Exception("gap_buffer too short");
         }
 
-        int pos = TOTAL_HEADER_N_BYTES;
+        //02 01 1A 04 09 45 44 47 03 03 AA FE 12 16 AA FE 30 00 E1 6A 6D FD 03 10 9B 91 3C 38 50 32 28 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+        int pos = -1;
+        for (int i = 4; i < gap_buffer.length; i++) {
+            //System.out.println("gap_buffer[i] "+gap_buffer[i]);
+            //System.out.println("gap_buffer[i-3] "+gap_buffer[i-3]);
+            //System.out.println("gap_buffer[i-4] "+gap_buffer[i-4]);
+            if (gap_buffer[i] == ECODROIDGPS_EID_BROADCAST_FLAG_AND_VERISON_BYTE_VERSION1 && gap_buffer[i-3] == (byte) 0xFE && gap_buffer[i-4] == (byte) 0xAA) {
+                pos = i;
+                break;
+            }
+        }
+
+        if (pos == -1) {
+            throw new Exception("failed to find ECODROIDGPS_EID_BROADCAST_FLAG_AND_VERISON_BYTE");
+        }
 
         byte flag_and_version = gap_buffer[pos++];
 

@@ -67,6 +67,7 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
     public static final ParcelUuid eddystone_service_uuid = ParcelUuid.fromString("0000feaa-0000-1000-8000-00805f9b34fb");  //https://proandroiddev.com/scanning-google-eddystone-in-android-application-cf181e0a8648
     public static final long BLE_GAP_SCAN_MODE_SETMOCK_INTERVAL = 1000;
     public long m_last_BLE_GAP_SCAN_MODE_SETMOCK_ts = 0;
+    public String m_last_BLE_GAP_DEV_NAME = "";
 
     rfcomm_conn_mgr g_rfcomm_mgr = null;
     ntrip_conn_mgr m_ntrip_conn_mgr = null;
@@ -193,8 +194,10 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
             if (scan_record_bytes == null) {
                 scan_record_bytes = new byte[0];
             }
-            Log.d(TAG, "onScanResult Device Name: " + result.getDevice().getName() + " rssi: " + result.getRssi() + " scanrecord bytes: " + toHexString(scan_record_bytes) );
+            Log.d(TAG, "onScanResult Device Name: " + result.getDevice().getName() + " rssi: " + result.getRssi() + " scanrecord bytes: " + toHexString(scan_record_bytes));
+            //ex: 02 01 1A 04 09 45 44 47 03 03 AA FE 12 16 AA FE 30 00 E1 6A 6D FD 03 10 9B 91 3C 38 50 32 28 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
             parse_scan_record_bytes_and_set_location(scan_record_bytes);
+            m_last_BLE_GAP_DEV_NAME = result.getDevice().getName();
         }
     };
 
@@ -211,7 +214,7 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
         }
 
         if (now - m_last_BLE_GAP_SCAN_MODE_SETMOCK_ts > BLE_GAP_SCAN_MODE_SETMOCK_INTERVAL) {
-            m_last_BLE_GAP_SCAN_MODE_SETMOCK_ts = now;//ok
+            m_last_BLE_GAP_SCAN_MODE_SETMOCK_ts = now; //ok
         } else {
             return; //dont parse/announce locaiton yet
         }
@@ -1033,7 +1036,7 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
                             @Override
                             public void run() {
                                 toast("Activated Mock location provider...");
-                                updateNotification("Bluetooth GNSS - Active...", "Connected to: "+m_bdaddr, "");
+                                updateNotification("Bluetooth GNSS - Active...", "Connected to: "+get_connected_device_alias(), "");
                             }
                         }
                 );
@@ -1048,7 +1051,7 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
                                 @Override
                                 public void run() {
                                     toast("Activated Mock location provider...");
-                                    updateNotification("Bluetooth GNSS - Active...", "Connected to: "+m_bdaddr, "");
+                                    updateNotification("Bluetooth GNSS - Active...", "Connected to: "+get_connected_device_alias(), "");
                                 }
                             }
                     );
@@ -1065,6 +1068,13 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
         return g_mock_location_active;
     }
 
+    public String get_connected_device_alias()
+    {
+        if (m_ble_gap_scan_mode) {
+            return m_last_BLE_GAP_DEV_NAME;
+        }
+        return ""+m_bdaddr;
+    }
 
     // Binder given to clients
     private final IBinder m_binder = new LocalBinder();
