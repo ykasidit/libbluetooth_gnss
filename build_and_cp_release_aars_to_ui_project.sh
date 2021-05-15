@@ -18,6 +18,7 @@ exit_if_failed
 
 cp libecodroidgnss_parse/build/outputs/aar/libecodroidgnss_parse-release.aar ../bluetooth_gnss/android/libecodroidgnss_parse/
 exit_if_failed
+
 echo "copied all aars to ui project (../bluetooth_gnss)"
 echo SUCCESS
 
