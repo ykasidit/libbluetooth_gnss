@@ -22,6 +22,7 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.location.Criteria;
 import android.os.Binder;
 import android.os.Environment;
 import android.os.Handler;
@@ -96,7 +97,6 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
     boolean m_log_bt_rx = false;
     boolean m_disable_ntrip = false;
     boolean m_ble_gap_scan_mode = false;
-    boolean m_ble_gap_scan_enable = false;
     FileOutputStream m_log_bt_rx_fos = null;
 
     @Override
@@ -107,11 +107,7 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
         if (intent != null) {
             try {
                 m_ble_gap_scan_mode = intent.getBooleanExtra(BLE_GAP_SCAN_MODE, false);
-                m_ble_gap_scan_enable = intent.getBooleanExtra("ble_gap_scan_enable", false);
-                if (m_ble_gap_scan_mode) {
-                    Log.d(TAG, "onStartCommand m_ble_gap_scan_mode "+m_ble_gap_scan_mode+" m_ble_gap_scan_enable "+m_ble_gap_scan_enable);
-                    handle_ble_gap_scan_enable_changed();
-                } else {
+                {
 
                     m_bdaddr = intent.getStringExtra("bdaddr");
                     m_secure_rfcomm = intent.getBooleanExtra("secure", true);
@@ -132,26 +128,34 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
                     }
                     m_icon_id = intent.getIntExtra("activity_icon_id", 0);
 
-                    if (m_bdaddr == null) {
-                        String msg = "bluetooth_gnss_service: startservice: Target Bluetooth device not specifed - cannot start...";
-                        Log.d(TAG, msg);
-                        toast(msg);
+                    if (m_ble_gap_scan_mode) {
+                        Log.d(TAG, "onStartCommand pre call start_forground m_ble_gap_scan_mode "+m_ble_gap_scan_mode);
+                        start_foreground("Scanning GPS broadcasts...", "", "");
+                        Log.d(TAG, "onStartCommand post call start_forground m_ble_gap_scan_mode "+m_ble_gap_scan_mode);
+                        handle_ble_gap_scan_enable_changed();
                     } else {
-                        Log.d(TAG, "onStartCommand got bdaddr");
-                        int start_ret = connect(m_bdaddr, m_secure_rfcomm, getApplicationContext());
-                        if (start_ret == 0) {
-                            start_foreground("Connecting...", "target device: " + m_bdaddr, "");
-                        }
-                        m_all_ntrip_params_specified = true;
-                        for (String key : REQUIRED_INTENT_EXTRA_PARAM_KEYS) {
-                            if (m_start_intent.getStringExtra(key) == null || m_start_intent.getStringExtra(key).length() == 0) {
-                                Log.d(TAG, "key: " + key + "got null or empty string so m_all_ntrip_params_specified false");
-                                m_all_ntrip_params_specified = false;
-                                break;
+
+                        if (m_bdaddr == null) {
+                            String msg = "bluetooth_gnss_service: startservice: Target Bluetooth device not specifed - cannot start...";
+                            Log.d(TAG, msg);
+                            toast(msg);
+                        } else {
+                            Log.d(TAG, "onStartCommand got bdaddr");
+                            int start_ret = connect(m_bdaddr, m_secure_rfcomm, getApplicationContext());
+                            if (start_ret == 0) {
+                                start_foreground("Connecting...", "target device: " + m_bdaddr, "");
                             }
+                            m_all_ntrip_params_specified = true;
+                            for (String key : REQUIRED_INTENT_EXTRA_PARAM_KEYS) {
+                                if (m_start_intent.getStringExtra(key) == null || m_start_intent.getStringExtra(key).length() == 0) {
+                                    Log.d(TAG, "key: " + key + "got null or empty string so m_all_ntrip_params_specified false");
+                                    m_all_ntrip_params_specified = false;
+                                    break;
+                                }
+                            }
+                            Log.d(TAG, "m_all_ntrip_params_specified: " + m_all_ntrip_params_specified);
+                            //ntrip connection would start after we get next gga bashed on this m_all_ntrip_params_specified flag
                         }
-                        Log.d(TAG, "m_all_ntrip_params_specified: " + m_all_ntrip_params_specified);
-                        //ntrip connection would start after we get next gga bashed on this m_all_ntrip_params_specified flag
                     }
                 }
             } catch (Exception e) {
@@ -240,10 +244,10 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
     }
 
     public void handle_ble_gap_scan_enable_changed() {
-        Log.d(TAG, "handle_ble_gap_scan_enable_changed() m_ble_gap_scan_enable "+ m_ble_gap_scan_enable);
-        if (m_ble_gap_scan_enable) {
+        Log.d(TAG, "handle_ble_gap_scan_enable_changed() m_ble_gap_scan_mode "+ m_ble_gap_scan_mode);
+        if (m_ble_gap_scan_mode) {
             if (is_ble_gap_scan_thread_running()) {
-                Log.d(TAG, "handle_ble_gap_scan_enable_changed() m_ble_gap_scan_enable "+ m_ble_gap_scan_enable+" already running so omit");
+                Log.d(TAG, "handle_ble_gap_scan_enable_changed() m_ble_gap_scan_mode "+ m_ble_gap_scan_mode+" already running so omit");
             } else {
                 ble_gap_scan_thread = new Thread() {
                     public void run ()
@@ -387,6 +391,12 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
 
     public boolean is_bt_connected()
     {
+        if (m_ble_gap_scan_mode) {
+            if (System.currentTimeMillis() - m_last_BLE_GAP_SCAN_MODE_SETMOCK_ts < BLE_GAP_SCAN_MODE_SETMOCK_INTERVAL*3) {
+                return true;
+            }
+            return false;
+        }
         if (g_rfcomm_mgr != null && g_rfcomm_mgr.is_bt_connected()) {
             return true;
         }
@@ -394,6 +404,8 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
     }
 
     public boolean is_trying_bt_connect() {
+        if (is_ble_gap_scan_thread_running())
+            return true;
         return m_connecting_thread != null && m_connecting_thread.isAlive();
     }
 
@@ -1013,8 +1025,8 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
                         /*boolean supportsAltitude*/ true,
                         /*boolean supportsSpeed*/ true,
                         /*boolean supportsBearing */ false,
-                        android.location.Criteria.POWER_LOW,
-                        android.location.Criteria.ACCURACY_FINE);
+                        Criteria.POWER_LOW,
+                        Criteria.ACCURACY_MEDIUM);
                 locationManager.setTestProviderEnabled(LocationManager.GPS_PROVIDER, true);
                 m_handler.post(
                         new Runnable() {

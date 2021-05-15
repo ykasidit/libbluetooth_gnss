@@ -31,7 +31,6 @@ public class test_start_service_ble_gap_scan_mode {
 
         Intent intent = new Intent(appContext, bluetooth_gnss_service.class);
         intent.putExtra("ble_gap_scan_mode", true);
-        intent.putExtra("ble_gap_scan_enable", true);
         appContext.startService(intent);
 
         int n_rounds = 10;
