@@ -124,6 +124,7 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
                         throw new Exception("activity_class_name not specified");
                     }
                     m_target_activity_class = Class.forName(cn);
+                    Log.d(TAG, "m_target_activity_class: "+m_target_activity_class.getCanonicalName());
                     if (!intent.hasExtra("activity_icon_id")) {
                         throw new Exception("activity_icon_id not specified");
                     }
@@ -958,10 +959,22 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
         return mock_enabled;
     }
 
+    File bt_gnss_test_debug_mock_location_1_1_mode_flag = new File("/sdcard/bt_gnss_test_debug_mock_location_1_1_mode_flag");
 
     private void setMock(double latitude, double longitude, double altitude, float accuracy, float bearing, float speed) {
 
+        try {
+            if (bt_gnss_test_debug_mock_location_1_1_mode_flag.isFile()) {
+                Log.d(TAG, "NOTE: bt_gnss_test_debug_mock_location_1_1_mode_flag exists - overriding lat, lon to 1, 1");
+                latitude = 1;
+                longitude = 1;
+            }
+        } catch (Throwable tr) {
+            Log.d(TAG, "WARNING: check bt_gnss_test_debug_mock_location_1_1_mode_flag exception: "+Log.getStackTraceString(tr));
+        }
+
         Log.d(TAG, "setMock accuracy_meters: "+accuracy);
+
         activate_mock_location(); //this will check a static flag and not re-activate if already active
         LocationManager locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
 
