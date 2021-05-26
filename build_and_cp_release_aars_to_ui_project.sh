@@ -7,6 +7,8 @@ exit_if_failed() {
     fi
 }
 
+./gradlew clean
+
 ./gradlew assembleRelease
 exit_if_failed
 
