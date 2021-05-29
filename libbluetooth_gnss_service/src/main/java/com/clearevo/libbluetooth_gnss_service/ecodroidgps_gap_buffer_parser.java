@@ -2,6 +2,10 @@ package com.clearevo.libbluetooth_gnss_service;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.TimeZone;
 
 public class ecodroidgps_gap_buffer_parser {
 
@@ -22,18 +26,42 @@ public class ecodroidgps_gap_buffer_parser {
 
     public static double LAT_LON_MULTIPLIER = Math.pow(10, 7);
     public static final byte ECODROIDGPS_EID_BROADCAST_FLAG_AND_VERISON_BYTE_VERSION1 = (byte) 0xE1;
+    public static long y2k_ts_millis = get_y2k_ts_millis();
+    public static SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+
+    public static long get_y2k_ts_millis()
+    {
+        Calendar c = Calendar.getInstance();
+        c.set(2000,0,1, 0,0,0);
+        return c.getTimeInMillis();
+    }
+
+    public static Date get_date_from_edg_gap_ts(long ts)
+    {
+        Calendar c = Calendar.getInstance();
+        c.setTimeInMillis(get_y2k_ts_millis() + (ts * 1000));
+        return c.getTime();
+    }
+
+    public static String get_date_str_from_edg_gap_ts(long ts)
+    {
+        return sdf.format(get_date_from_edg_gap_ts(ts));
+    }
 
     public static class ecodroidgps_broadcasted_location {
         public ecodroidgps_broadcasted_location(byte flag_and_version, double lat, double lon, long timestamp) {
             this.lat = lat;
             this.lon = lon;
             this.timestamp = timestamp;
+            this.timestamp_str = get_date_str_from_edg_gap_ts(timestamp);
             this.flag_and_version = flag_and_version;
+
         }
         public byte flag_and_version;
         public double lat;
         public double lon;
         public long timestamp;
+        public String timestamp_str;
     }
 
     static ecodroidgps_broadcasted_location parse(byte[] gap_buffer) throws Exception

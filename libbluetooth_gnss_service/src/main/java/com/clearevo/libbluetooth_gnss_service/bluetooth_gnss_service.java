@@ -50,6 +50,7 @@ import java.io.FileOutputStream;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Calendar;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -203,6 +204,7 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
     };
 
 
+
     public void parse_scan_record_bytes_and_set_location(byte[] gap_buffer)
     {
         long now = System.currentTimeMillis();
@@ -222,26 +224,29 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
         try {
             ecodroidgps_gap_buffer_parser.ecodroidgps_broadcasted_location loc = ecodroidgps_gap_buffer_parser.parse(gap_buffer);
             Log.d(TAG, "ECODROIDGPS_BROADCAST_MODE got broadcast: lat: "+loc.lat+" lon: "+loc.lon+" timestamp: "+loc.timestamp);
-            HashMap<String, Object> params_map = new HashMap<String, Object>();
-            String talker = ECODROIDGPS_BROADCAST_MODE;
-            params_map.put("mode", ECODROIDGPS_BROADCAST_MODE);
-            params_map.put(talker+"_timestamp", (double) loc.timestamp);
-            params_map.put(talker+"_timestamp_ts", now);
-            params_map.put(talker+"_lat", (double) loc.lat);
-            params_map.put(talker+"_lat", (double) loc.lat);
-            params_map.put(talker+"_lon", (double) loc.lon);
-            params_map.put(talker+"_lat_ts", now);
-            params_map.put(talker+"_lon_ts", now);
+
+
+            double lat = loc.lat, lon = loc.lon, alt = 0.0, hdop = 0.0, speed = 0.0, bearing = 0.0/0.0;
+            double accuracy = hdop * get_connected_device_CEP();
+            setMock(lat, lon, alt, (float) accuracy, (float) bearing, (float) speed);
+
+            String talker = "GN";
+            m_gnss_parser.put_param(talker, "location_from_talker", talker);
+            m_gnss_parser.put_param("GN", "time", loc.timestamp_str);
+            m_gnss_parser.put_param("", "lat", lat);
+            m_gnss_parser.put_param("", "lon", lon);
+            m_gnss_parser.put_param("", "mock_location_set_ts", System.currentTimeMillis());
+            HashMap<String, Object> param_map = m_gnss_parser.getM_parsed_params_hashmap();
+            Log.d(TAG, "ble gap lat: "+param_map.get("lat_double_07_str"));
+            Log.d(TAG, "ble gap lon: "+param_map.get("lon_double_07_str"));
             try {
                 if (m_activity_for_nmea_param_callbacks != null) {
-                    m_activity_for_nmea_param_callbacks.on_updated_nmea_params(params_map);
+                    m_activity_for_nmea_param_callbacks.on_updated_nmea_params(param_map);
                 }
             } catch (Exception e) {
                 Log.d(TAG, "bluetooth_gnss_service call callback in m_activity_for_nmea_param_callbacks exception: "+Log.getStackTraceString(e));
             }
-            double lat = loc.lat, lon = loc.lon, alt = 0.0, hdop = 0.0, speed = 0.0, bearing = 0.0/0.0;
-            double accuracy = hdop * get_connected_device_CEP();
-            setMock(lat, lon, alt, (float) accuracy, (float) bearing, (float) speed);
+
         } catch (Throwable tr) {
             Log.d(TAG, "parse_scan_record_bytes_and_set_location exception: "+Log.getStackTraceString(tr));
         }
@@ -274,9 +279,6 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
 
                             btLeScanner = btAdapter.getBluetoothLeScanner();
 
-                            check_bt_enabled_and_permissions();
-                            Log.d(TAG, "check_bt_enabled_and_permissions passed");
-
                             while (ble_gap_scan_thread == this) {
                                 Log.d(TAG, "btLeScanner.startScan(leScanCallback); START");
                                 btLeScanner.startScan(filters, settings, leScanCallback);
@@ -301,54 +303,6 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
             close();
         }
     }
-
-    public void check_bt_enabled_and_permissions() throws Exception
-    {
-        BluetoothManager btManager = (BluetoothManager)getSystemService(Context.BLUETOOTH_SERVICE);
-        BluetoothAdapter btAdapter = btManager.getAdapter();
-        BluetoothLeScanner btLeScanner = btAdapter.getBluetoothLeScanner();
-
-        if (btAdapter != null && !btAdapter.isEnabled()) {
-            m_handler.post(
-                    new Runnable() {
-                        @Override
-                        public void run() {
-                            Intent enableIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
-                            enableIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                            getApplicationContext().startActivity(enableIntent);
-                        }
-                    }
-            );
-            throw new Exception("bt not enabled");
-        }
-
-        // Make sure we have access coarse location enabled, if not, prompt the user to enable it
-        if (getApplicationContext().checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            m_handler.post(
-                    new Runnable() {
-                        @Override
-                        public void run() {
-                            final AlertDialog.Builder builder = new AlertDialog.Builder(getApplicationContext());
-                            builder.setTitle("This app needs location access");
-                            builder.setMessage("Please grant location access so this app can detect peripherals.");
-                            builder.setPositiveButton(android.R.string.ok, null);
-                            builder.setOnDismissListener(new DialogInterface.OnDismissListener() {
-                                @Override
-                                public void onDismiss(DialogInterface dialog) {
-                                    ActivityCompat.requestPermissions(null, new String[] {
-                                            Manifest.permission.ACCESS_COARSE_LOCATION
-                                    }, 1);
-                                }
-                            });
-                            builder.show();
-                        }
-                    }
-            );
-            throw new Exception("ACCESS_COARSE_LOCATION permission not granted yet");
-        }
-
-    }
-
 
     public void start_ntrip_conn_if_specified_but_not_connected() {
 
@@ -1158,14 +1112,14 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
                             accuracy = hdop * get_connected_device_CEP();
                         }
                         setMock(lat, lon, alt, (float) accuracy, (float) bearing, (float) speed);
+                        m_gnss_parser.put_param("", "hdop", hdop);
+                        m_gnss_parser.put_param("", "location_from_talker", talker);
+
                         m_gnss_parser.put_param("", "lat", lat);
                         m_gnss_parser.put_param("", "lon", lon);
                         m_gnss_parser.put_param("", "alt", alt);
-                        m_gnss_parser.put_param("", "hdop", hdop);
                         m_gnss_parser.put_param("", "accuracy", accuracy);
-                        m_gnss_parser.put_param("", "location_from_talker", talker);
                         m_gnss_parser.put_param("", "mock_location_set_ts", System.currentTimeMillis());
-
                         break;
                     } else {
                         //omit as same ts as last

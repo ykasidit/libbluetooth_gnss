@@ -36,6 +36,11 @@ public class gnss_sentence_parser {
     };
     gnss_parser_callbacks m_cb;
     SentenceFactory m_sf = SentenceFactory.getInstance();
+
+    public HashMap<String, Object> getM_parsed_params_hashmap() {
+        return m_parsed_params_hashmap;
+    }
+
     HashMap<String, Object> m_parsed_params_hashmap = new HashMap<String, Object>();
 
     public gnss_parser_callbacks get_callback() {
