@@ -384,17 +384,21 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
     Thread m_auto_reconnect_thread = null;
     public static final long AUTO_RECONNECT_MILLIS = 15*1000;
 
-    void stop_auto_reconnect_thread() {
+    public void stop_auto_reconnect_thread() {
 
+        Log.d(TAG, "stop_auto_reconnect_thread start");
         if (m_auto_reconnect_thread != null && m_auto_reconnect_thread.isAlive()) {
             //interrupt old thread so it will end...
+            Log.d(TAG, "stop_auto_reconnect_thread1.0");
             try {
                 m_auto_reconnect_thread.interrupt();
+                Log.d(TAG, "stop_auto_reconnect_thread1.1");
             } catch (Exception e) {
                 Log.d(TAG, "interrrupt old m_auto_reconnect_thread failed exception: "+Log.getStackTraceString(e));
             }
+            Log.d(TAG, "stop_auto_reconnect_thread1.2");
         }
-
+        Log.d(TAG, "stop_auto_reconnect_thread end");
     }
 
     void start_auto_reconnect_thread()
@@ -580,8 +584,6 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
         Log.d(TAG, "close()0");
         deactivate_mock_location();
 
-        stop_auto_reconnect_thread();
-
         if (is_ble_gap_scan_thread_running()) {
             try {
                 ble_gap_scan_thread.interrupt();
@@ -590,14 +592,6 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
         }
 
         boolean was_connected = false;
-
-        try {
-            Log.d(TAG, "close()1");
-            m_auto_reconnect_thread.interrupt();
-            Log.d(TAG, "close()2");
-        } catch (Exception e) {
-        }
-        m_auto_reconnect_thread = null;
 
         if (g_rfcomm_mgr != null) {
             Log.d(TAG, "close()3");
@@ -1196,6 +1190,7 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
     public void onDestroy() {
         Log.d(TAG, "onDestroy()");
         boolean was_connected = close();
+        stop_auto_reconnect_thread();
         toast("Stopped Bluetooth GNSS Service...");
     }
 }

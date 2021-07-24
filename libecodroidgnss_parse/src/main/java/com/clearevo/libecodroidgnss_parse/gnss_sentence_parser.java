@@ -127,7 +127,7 @@ public class gnss_sentence_parser {
 
             if (nmea.startsWith("$PUBX")) {
                 //proprietary messages handle here...
-                Log.d(TAG, "got PUBX: "+nmea);
+                //Log.d(TAG, "got PUBX: "+nmea);
 
                 if (nmea.startsWith("$PUBX,00")) {
                     //ublox 31.3.2 POSITION (PUBX,00) - https://www.u-blox.com/sites/default/files/products/documents/u-blox8-M8_ReceiverDescrProtSpec_%28UBX-13003221%29_Public.pdf
