@@ -53,6 +53,7 @@ public class test_ntrip_conn_mgr implements ntrip_conn_callbacks{
 
         //make sure you write /etc/test_ntrip_conn_mgr.properties in a format like https://www.mkyong.com/java/java-properties-file-examples/
 
+        boolean no_ntrip_cred = false;
         try (InputStream input = new FileInputStream("/etc/test_ntrip_conn_mgr.properties")) {
 
             Properties prop = new Properties();
@@ -65,7 +66,11 @@ public class test_ntrip_conn_mgr implements ntrip_conn_callbacks{
             pass = prop.getProperty("pass");
 
         } catch (IOException ex) {
-            throw ex;
+            no_ntrip_cred = true;
+            //host = "www.igs-ip.net";
+            host = "caster.centipede.fr";
+            port = 2101;
+
         }
 
         String first_mount_point = null;
@@ -107,12 +112,19 @@ public class test_ntrip_conn_mgr implements ntrip_conn_callbacks{
             } catch (java.net.SocketTimeoutException se) {
                 //ok - correct
                 System.out.println("ok wrong port timeed out correctly...");
+            }
+            catch (java.net.ConnectException ce) {
+                //ok - correct
+                System.out.println("ok connectexception...");
             } finally {
                 if (mgr != null)
                     mgr.close();
             }
 
         }
+
+        if (no_ntrip_cred)
+            return;
 
         System.out.println("connecting to first_mount_point: "+first_mount_point);
         assertTrue(first_mount_point != null);

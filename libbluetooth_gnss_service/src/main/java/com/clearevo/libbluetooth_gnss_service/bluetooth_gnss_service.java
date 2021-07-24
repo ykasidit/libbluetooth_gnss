@@ -114,6 +114,7 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
                     m_bdaddr = intent.getStringExtra("bdaddr");
                     m_secure_rfcomm = intent.getBooleanExtra("secure", true);
                     m_auto_reconnect = intent.getBooleanExtra("reconnect", false);
+
                     m_log_bt_rx = intent.getBooleanExtra("log_bt_rx", false);
                     m_disable_ntrip = intent.getBooleanExtra("disable_ntrip", false);
                     Log.d(TAG, "m_secure_rfcomm: " + m_secure_rfcomm);
@@ -131,34 +132,10 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
                     }
                     m_icon_id = intent.getIntExtra("activity_icon_id", 0);
 
-                    if (m_ble_gap_scan_mode) {
-                        Log.d(TAG, "onStartCommand pre call start_forground m_ble_gap_scan_mode "+m_ble_gap_scan_mode);
-                        start_foreground("Scanning GPS broadcasts...", "", "");
-                        Log.d(TAG, "onStartCommand post call start_forground m_ble_gap_scan_mode "+m_ble_gap_scan_mode);
-                        handle_ble_gap_scan_enable_changed();
+                    if (m_auto_reconnect) {
+                        start_auto_reconnect_thread();
                     } else {
-
-                        if (m_bdaddr == null) {
-                            String msg = "bluetooth_gnss_service: startservice: Target Bluetooth device not specifed - cannot start...";
-                            Log.d(TAG, msg);
-                            toast(msg);
-                        } else {
-                            Log.d(TAG, "onStartCommand got bdaddr");
-                            int start_ret = connect(m_bdaddr, m_secure_rfcomm, getApplicationContext());
-                            if (start_ret == 0) {
-                                start_foreground("Connecting...", "target device: " + m_bdaddr, "");
-                            }
-                            m_all_ntrip_params_specified = true;
-                            for (String key : REQUIRED_INTENT_EXTRA_PARAM_KEYS) {
-                                if (m_start_intent.getStringExtra(key) == null || m_start_intent.getStringExtra(key).length() == 0) {
-                                    Log.d(TAG, "key: " + key + "got null or empty string so m_all_ntrip_params_specified false");
-                                    m_all_ntrip_params_specified = false;
-                                    break;
-                                }
-                            }
-                            Log.d(TAG, "m_all_ntrip_params_specified: " + m_all_ntrip_params_specified);
-                            //ntrip connection would start after we get next gga bashed on this m_all_ntrip_params_specified flag
-                        }
+                        connect();
                     }
                 }
             } catch (Exception e) {
@@ -173,6 +150,39 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
         }
 
         return START_REDELIVER_INTENT;
+    }
+
+    void connect()
+    {
+        if (m_ble_gap_scan_mode) {
+            Log.d(TAG, "onStartCommand pre call start_forground m_ble_gap_scan_mode "+m_ble_gap_scan_mode);
+            start_foreground("Scanning GPS broadcasts...", "", "");
+            Log.d(TAG, "onStartCommand post call start_forground m_ble_gap_scan_mode "+m_ble_gap_scan_mode);
+            handle_ble_gap_scan_enable_changed();
+        } else {
+
+            if (m_bdaddr == null) {
+                String msg = "bluetooth_gnss_service: startservice: Target Bluetooth device not specifed - cannot start...";
+                Log.d(TAG, msg);
+                toast(msg);
+            } else {
+                Log.d(TAG, "onStartCommand got bdaddr");
+                int start_ret = connect(m_bdaddr, m_secure_rfcomm, getApplicationContext());
+                if (start_ret == 0) {
+                    start_foreground("Connecting...", "target device: " + m_bdaddr, "");
+                }
+                m_all_ntrip_params_specified = true;
+                for (String key : REQUIRED_INTENT_EXTRA_PARAM_KEYS) {
+                    if (m_start_intent.getStringExtra(key) == null || m_start_intent.getStringExtra(key).length() == 0) {
+                        Log.d(TAG, "key: " + key + "got null or empty string so m_all_ntrip_params_specified false");
+                        m_all_ntrip_params_specified = false;
+                        break;
+                    }
+                }
+                Log.d(TAG, "m_all_ntrip_params_specified: " + m_all_ntrip_params_specified);
+                //ntrip connection would start after we get next gga bashed on this m_all_ntrip_params_specified flag
+            }
+        }
     }
 
     Thread ble_gap_scan_thread = null;
@@ -372,20 +382,26 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
     }
 
     Thread m_auto_reconnect_thread = null;
-    public static final long AUTO_RECONNECT_MILLIS = 30*1000;
+    public static final long AUTO_RECONNECT_MILLIS = 15*1000;
+
+    void stop_auto_reconnect_thread() {
+
+        if (m_auto_reconnect_thread != null && m_auto_reconnect_thread.isAlive()) {
+            //interrupt old thread so it will end...
+            try {
+                m_auto_reconnect_thread.interrupt();
+            } catch (Exception e) {
+                Log.d(TAG, "interrrupt old m_auto_reconnect_thread failed exception: "+Log.getStackTraceString(e));
+            }
+        }
+
+    }
 
     void start_auto_reconnect_thread()
     {
         if (m_auto_reconnect) {
 
-            if (m_auto_reconnect_thread != null && m_auto_reconnect_thread.isAlive()) {
-                //interrupt old thread so it will end...
-                try {
-                    m_auto_reconnect_thread.interrupt();
-                } catch (Exception e) {
-                    Log.d(TAG, "interrrupt old m_auto_reconnect_thread failed exception: "+Log.getStackTraceString(e));
-                }
-            }
+            stop_auto_reconnect_thread();
 
             m_auto_reconnect_thread = new Thread() {
 
@@ -393,31 +409,35 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
 
                     Log.d(TAG, "auto-reconnect thread: "+this.hashCode()+" START");
 
-                    while (m_auto_reconnect_thread == this && m_auto_reconnect) {
+                    try {
 
-                        try {
-                            Log.d(TAG, "auto-reconnect thread: "+this.hashCode()+" - start sleep");
-                            Thread.sleep(AUTO_RECONNECT_MILLIS);
-                        } catch (InterruptedException e) {
-                            Log.d(TAG, "auto-reconnect thread: "+this.hashCode()+" - sleep interrupted likely by close() - break out of loop and end now");
-                            break;
+                        while (m_auto_reconnect_thread == this && m_auto_reconnect) {
+
+                            //connect() must be run from main service thread in case it needs to post
+                            if (!is_bt_connected() && !is_trying_bt_connect()) {
+                                Log.d(TAG, "auto-reconnect thread - has target dev and not connected - try reconnect...");
+                                m_handler.post(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        toast("Auto-Reconnect: Trying to connect...");
+                                        connect();
+                                    }
+                                });
+                            } else {
+                                Log.d(TAG, "auto-reconnect thread - likely already connecting or already connected or no target dev");
+                            }
+
+                            try {
+                                Log.d(TAG, "auto-reconnect thread: " + this.hashCode() + " - start sleep");
+                                Thread.sleep(AUTO_RECONNECT_MILLIS);
+                            } catch (InterruptedException e) {
+                                Log.d(TAG, "auto-reconnect thread: " + this.hashCode() + " - sleep interrupted likely by close() - break out of loop and end now");
+                                break;
+                            }
+
                         }
-
-                        //connect() must be run from main service thread in case it needs to post
-                        if (m_bdaddr != null && m_bdaddr.length() > 0 && !is_bt_connected() && !is_trying_bt_connect()) {
-                            Log.d(TAG, "auto-reconnect thread - has target dev and not connected - try reconnect...");
-                            m_handler.post(new Runnable() {
-                                @Override
-                                public void run() {
-                                    toast("Auto-Reconnect: Trying to connect...");
-                                    connect(m_bdaddr, m_secure_rfcomm, getApplicationContext());
-                                }
-                            });
-                        } else {
-                            Log.d(TAG, "auto-reconnect thread - likely already connecting or already connected or no target dev");
-                        }
-
-
+                    } catch (Throwable tr) {
+                        Log.d(TAG, "auto-reconnect thread exception: "+Log.getStackTraceString(tr));
                     }
 
                     Log.d(TAG, "auto-reconnect thread: "+this.hashCode()+" END");
@@ -464,9 +484,6 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
                 g_rfcomm_mgr = new rfcomm_conn_mgr(dev, secure, this, context);
 
                 start_connecting_thread();
-                if (m_auto_reconnect) {
-                    start_auto_reconnect_thread();
-                }
             }
             ret = 0;
         } catch (Exception e) {
@@ -562,6 +579,8 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
     {
         Log.d(TAG, "close()0");
         deactivate_mock_location();
+
+        stop_auto_reconnect_thread();
 
         if (is_ble_gap_scan_thread_running()) {
             try {

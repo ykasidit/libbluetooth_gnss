@@ -6,7 +6,9 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
@@ -157,6 +159,7 @@ public class ntrip_conn_mgr {
                     throw new Exception("get_mount_point_list failed as server resp_header_first_line as does not contain: ["+SOURCETABLE_STR+"] - resp_header_first_line: " + resp_header_first_line);
 
                 ArrayList<String> sourcetable_lines = read_is_get_lines_until(m_sock_is, END_SOURCETABLE_STR, MAX_SOURCETABLE_LINES, SOURCETABLE_READ_TIMEOUT_MILLIS, "OK");
+                Collections.sort(sourcetable_lines);
                 return sourcetable_lines;
 
             } else {
@@ -249,7 +252,7 @@ public class ntrip_conn_mgr {
         ArrayList<String> lines = new ArrayList<String>();
         byte[] resp_line_bytes = null;
         while ((resp_line_bytes = inputstream_to_queue_reader_thread.bytes_readline(is, tmp_read_buf)) != null) {
-            String read_line = new String(resp_line_bytes, "ascii");
+            String read_line = new String(resp_line_bytes,  StandardCharsets.UTF_8);
             Log.d(TAG, "read_is_get_lines_until: "+read_line+" end_flag: "+end_flag);
 
             if ((alt0_end_resp_line_with_flag != null && read_line.contains(alt0_end_resp_line_with_flag))) {
