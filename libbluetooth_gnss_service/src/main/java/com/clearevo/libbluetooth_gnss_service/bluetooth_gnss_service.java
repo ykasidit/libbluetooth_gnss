@@ -98,6 +98,7 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
     boolean m_disable_ntrip = false;
     boolean m_ble_gap_scan_mode = false;
     OutputStream m_log_bt_rx_fos = null;
+    OutputStream m_log_bt_rx_csv_fos = null;
     long log_bt_rx_bytes_written = 0;
 
     @Override
@@ -616,6 +617,12 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
                 m_log_bt_rx_fos = null;
             }
         } catch (Exception e) {}
+        try {
+            if (m_log_bt_rx_csv_fos != null) {
+                m_log_bt_rx_csv_fos.close();
+                m_log_bt_rx_csv_fos = null;
+            }
+        } catch (Exception e) {}
         log_file_uri = null;
         log_folder_uri = null;
 
@@ -734,6 +741,7 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
     }
 
     SimpleDateFormat log_name_sdf = new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss");
+    SimpleDateFormat csv_sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
     public void log_bt_rx(byte[] read_buf)
     {
         if (read_buf == null || read_buf.length == 0)
@@ -745,16 +753,20 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
                         //ref: https://stackoverflow.com/questions/61118918/create-new-file-in-the-directory-returned-by-intent-action-open-document-tree
                         DocumentFile dd = DocumentFile.fromTreeUri(getApplicationContext(), log_folder_uri);
                         DocumentFile df = dd.createFile("text/plain", (log_name_sdf.format(new Date()) + "_rx_log.txt"));
+                        DocumentFile df_csv = dd.createFile("text/csv", (log_name_sdf.format(new Date()) + "_location_log.csv"));
+
                         log_file_uri = df.getUri();
                         Log.d(TAG, "log_bt_rx: log_fp: " + df.getUri().toString());
                         log_bt_rx_bytes_written = 0;
                         m_log_bt_rx_fos = getApplicationContext().getContentResolver().openOutputStream(df.getUri());
+                        m_log_bt_rx_csv_fos = getApplicationContext().getContentResolver().openOutputStream(df_csv.getUri());
+                        m_log_bt_rx_csv_fos.write("time,lat,lon,alt\n".getBytes());
+                        m_log_bt_rx_csv_fos.flush();
                         Log.d(TAG, "log_bt_rx: m_log_bt_rx_fos ready");
                     }
                     if (m_log_bt_rx_fos != null) {
                         m_log_bt_rx_fos.write(read_buf);
                         log_bt_rx_bytes_written += read_buf.length;
-                        m_log_bt_rx_fos.flush();
                         //Log.d(TAG, "log_bt_rx: written n bytes: "+read_buf.length);
                     }
                 }
@@ -1099,7 +1111,7 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
     @Override
     public void on_updated_nmea_params(HashMap<String, Object> params_map) {
 
-        Log.d(TAG, "service: on_updated_nmea_params()");
+        Log.d(TAG, "service: on_updated_nmea_params() start");
         //try set_mock
         double lat = 0.0, lon = 0.0, alt = 0.0, hdop = 0.0, speed = 0.0, bearing = 0.0/0.0;
         for (String talker : GGA_MESSAGE_TALKER_TRY_LIST) {
@@ -1157,6 +1169,18 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
                             }
                             m_gnss_parser.put_param("", "logfile_n_bytes", log_bt_rx_bytes_written);
                         }
+                        if (m_log_bt_rx_csv_fos != null) {
+                            try {
+                                String line = csv_sdf.format(new_ts)+","+lat+","+lon+","+alt+"\n";
+                                m_log_bt_rx_csv_fos.write(line.getBytes());
+                                m_log_bt_rx_csv_fos.flush();
+                            } catch (Exception e) {
+                                Log.d(TAG, "WARNING: write csv exception: "+Log.getStackTraceString(e));
+                            }
+                        }
+                        if (m_log_bt_rx_fos != null) {
+                            m_log_bt_rx_fos.flush();
+                        }
                         break;
                     } else {
                         //omit as same ts as last
@@ -1167,6 +1191,7 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
             }
         }
 
+        Log.d(TAG, "service: on_updated_nmea_params() act");
 
         //report params to activity
         try {
@@ -1176,6 +1201,8 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
         } catch (Exception e) {
             Log.d(TAG, "bluetooth_gnss_service call callback in m_activity_for_nmea_param_callbacks exception: "+Log.getStackTraceString(e));
         }
+
+        Log.d(TAG, "service: on_updated_nmea_params() done");
 
     }
 
