@@ -1,8 +1,6 @@
 package com.clearevo.libbluetooth_gnss_service;
 
 
-import android.Manifest;
-import android.app.AlertDialog;
 import android.app.AppOpsManager;
 import android.app.Notification;
 import android.app.NotificationChannel;
@@ -18,16 +16,17 @@ import android.bluetooth.le.ScanFilter;
 import android.bluetooth.le.ScanRecord;
 import android.bluetooth.le.ScanResult;
 import android.bluetooth.le.ScanSettings;
+import android.content.ContentResolver;
 import android.content.Context;
-import android.content.DialogInterface;
 import android.content.Intent;
-import android.content.pm.PackageManager;
 import android.location.Criteria;
+import android.net.Uri;
 import android.os.Binder;
-import android.os.Environment;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.ParcelUuid;
+
+
 import android.util.Log;
 import android.widget.Toast;
 import android.location.LocationManager;
@@ -36,8 +35,8 @@ import android.os.Build;
 import android.os.SystemClock;
 import android.location.Location;
 
-import androidx.core.app.ActivityCompat;
 import androidx.core.app.NotificationCompat;
+import androidx.documentfile.provider.DocumentFile;
 
 import com.clearevo.libecodroidbluetooth.ntrip_conn_callbacks;
 import com.clearevo.libecodroidbluetooth.ntrip_conn_mgr;
@@ -47,10 +46,9 @@ import com.clearevo.libecodroidgnss_parse.gnss_sentence_parser;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.OutputStream;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Calendar;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -99,7 +97,8 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
     boolean m_log_bt_rx = false;
     boolean m_disable_ntrip = false;
     boolean m_ble_gap_scan_mode = false;
-    FileOutputStream m_log_bt_rx_fos = null;
+    OutputStream m_log_bt_rx_fos = null;
+    long log_bt_rx_bytes_written = 0;
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
@@ -617,6 +616,8 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
                 m_log_bt_rx_fos = null;
             }
         } catch (Exception e) {}
+        log_file_uri = null;
+        log_folder_uri = null;
 
         return was_connected;
     }
@@ -726,26 +727,36 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
         m_connecting_thread.start();
     }
 
+    Uri log_folder_uri = null;
+    Uri log_file_uri = null;
+    public void set_log_folder(Uri uri){
+        log_folder_uri = uri;
+    }
+
     SimpleDateFormat log_name_sdf = new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss");
     public void log_bt_rx(byte[] read_buf)
     {
+        if (read_buf == null || read_buf.length == 0)
+            return;
         try {
-            if (m_log_bt_rx && read_buf != null) {
-                if (m_log_bt_rx_fos == null) {
-                    File storage_fp = Environment.getExternalStorageDirectory();
-                    File logs_folder = new File(storage_fp, "bluetooth_gnss_logs");
-                    Log.d(TAG, "log_bt_rx logs_folder: "+logs_folder);
-                    if (!logs_folder.exists()) {
-                        boolean ret = logs_folder.mkdirs();
-                        Log.d(TAG, "mkdir ret: "+ret);
+            if (log_folder_uri != null) {
+                if (m_log_bt_rx && read_buf != null) {
+                    if (m_log_bt_rx_fos == null) {
+                        //ref: https://stackoverflow.com/questions/61118918/create-new-file-in-the-directory-returned-by-intent-action-open-document-tree
+                        DocumentFile dd = DocumentFile.fromTreeUri(getApplicationContext(), log_folder_uri);
+                        DocumentFile df = dd.createFile("text/plain", (log_name_sdf.format(new Date()) + "_rx_log.txt"));
+                        log_file_uri = df.getUri();
+                        Log.d(TAG, "log_bt_rx: log_fp: " + df.getUri().toString());
+                        log_bt_rx_bytes_written = 0;
+                        m_log_bt_rx_fos = getApplicationContext().getContentResolver().openOutputStream(df.getUri());
+                        Log.d(TAG, "log_bt_rx: m_log_bt_rx_fos ready");
                     }
-                    String fn = log_name_sdf.format(new Date())+".log";
-                    File log_fp = new File(logs_folder, fn);
-                    Log.d(TAG, "log_bt_rx log_fp: "+log_fp.getAbsolutePath());
-                    m_log_bt_rx_fos = new FileOutputStream(log_fp);
-                }
-                if (m_log_bt_rx_fos != null) {
-                    m_log_bt_rx_fos.write(read_buf);
+                    if (m_log_bt_rx_fos != null) {
+                        m_log_bt_rx_fos.write(read_buf);
+                        log_bt_rx_bytes_written += read_buf.length;
+                        m_log_bt_rx_fos.flush();
+                        //Log.d(TAG, "log_bt_rx: written n bytes: "+read_buf.length);
+                    }
                 }
             }
         } catch (Throwable tr) {
@@ -1133,6 +1144,19 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
                         m_gnss_parser.put_param("", "alt", alt);
                         m_gnss_parser.put_param("", "accuracy", accuracy);
                         m_gnss_parser.put_param("", "mock_location_set_ts", System.currentTimeMillis());
+                        if (log_file_uri != null) {
+                            m_gnss_parser.put_param("", "logfile_uri", log_file_uri.toString());
+                            Log.d(TAG, "log_file_uri.toString() "+log_file_uri.toString());
+                            String ls = log_file_uri.getLastPathSegment();
+                            if (ls.contains("/")) {
+                                String[] parts = ls.split("/");
+                                if (parts.length > 1) {
+                                    m_gnss_parser.put_param("", "logfile_folder", parts[0]);
+                                    m_gnss_parser.put_param("", "logfile_name", parts[1]);
+                                }
+                            }
+                            m_gnss_parser.put_param("", "logfile_n_bytes", log_bt_rx_bytes_written);
+                        }
                         break;
                     } else {
                         //omit as same ts as last

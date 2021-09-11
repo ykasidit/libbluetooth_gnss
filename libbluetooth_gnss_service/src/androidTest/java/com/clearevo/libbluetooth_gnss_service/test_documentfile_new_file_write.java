@@ -1,9 +1,9 @@
 package com.clearevo.libbluetooth_gnss_service;
 
 import android.content.Context;
-import android.content.Intent;
 import android.util.Log;
 
+import androidx.documentfile.provider.DocumentFile;
 import androidx.test.InstrumentationRegistry;
 import androidx.test.runner.AndroidJUnit4;
 
@@ -18,7 +18,7 @@ import static org.junit.Assert.assertEquals;
  * @see <a href="http://d.android.com/tools/testing">Testing documentation</a>
  */
 @RunWith(AndroidJUnit4.class)
-public class test_start_service_ble_gap_scan_mode {
+public class test_documentfile_new_file_write {
 
     static final String TAG = "btgnss_service";
 
@@ -28,19 +28,9 @@ public class test_start_service_ble_gap_scan_mode {
         Context appContext = InstrumentationRegistry.getTargetContext();
         assertEquals("com.clearevo.libbluetooth_gnss_service.test", appContext.getPackageName());
 
-        Log.d(TAG,"start test: "+this.getClass().getSimpleName());
-
-        Intent intent = new Intent(appContext, bluetooth_gnss_service.class);
-        intent.putExtra("ble_gap_scan_mode", true);
-        appContext.startService(intent);
-
-        int n_rounds = 10;
-        for (int i = 0; i < n_rounds; i++) {
-            Thread.sleep(1000);
-        }
-        appContext.stopService(intent);
-
-        Thread.sleep(5000);
+        Log.d(TAG,"start");
+        DocumentFile dd = null;
+        Log.d(TAG,"done");
 
     }
 }
