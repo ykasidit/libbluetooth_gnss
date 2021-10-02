@@ -12,6 +12,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
+import javax.net.ssl.SSLSocket;
+import javax.net.ssl.SSLSocketFactory;
+
 
 public class ntrip_conn_mgr {
 
@@ -101,12 +104,16 @@ public class ntrip_conn_mgr {
             //open client socket to target tcp server
             Log.d(TAG, "start opening tcp socket to host: " + m_tcp_server_host + " port: " + m_tcp_server_port);
 
-
-            m_tcp_server_sock = new Socket();
             InetSocketAddress sock_addr = new InetSocketAddress(m_tcp_server_host, m_tcp_server_port);
-
-            m_tcp_server_sock.connect(sock_addr, CONNECT_TIMEOUT_MILLIS);
-
+            if (m_tcp_server_port == 443) {
+                Log.d(TAG, "using ssl conn for specified port 443");
+                SSLSocketFactory sslsocketfactory = (SSLSocketFactory) SSLSocketFactory.getDefault();
+                SSLSocket sslsocket = (SSLSocket) sslsocketfactory.createSocket(m_tcp_server_host, m_tcp_server_port);
+                m_tcp_server_sock = sslsocket;
+            } else {
+                m_tcp_server_sock = new Socket();
+                m_tcp_server_sock.connect(sock_addr, CONNECT_TIMEOUT_MILLIS);
+            }
             if (!m_tcp_server_sock.isConnected())
                 throw new Exception("connect failed");
             try {
