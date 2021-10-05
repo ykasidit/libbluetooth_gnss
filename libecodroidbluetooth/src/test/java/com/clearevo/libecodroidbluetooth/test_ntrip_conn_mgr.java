@@ -96,6 +96,7 @@ public class test_ntrip_conn_mgr implements ntrip_conn_callbacks{
                             mgr.close();
                     }
                     Log.d(TAG, "got mpl: " + mpl);
+                    Log.d(TAG, "got mpl len: " + mpl.size());
                     assertTrue(mpl != null);
                     assertTrue(mpl.size() > 0);
                 }

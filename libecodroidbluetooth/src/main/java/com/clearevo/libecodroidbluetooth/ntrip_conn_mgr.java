@@ -139,7 +139,7 @@ public class ntrip_conn_mgr {
             m_sock_os.write(request_msg.getBytes("ascii"));
 
             //read HTTP Response header
-            ArrayList<String> http_response_header_lines = read_is_get_lines_until(m_sock_is, HTTP_RESPONSE_HEADER_END_FLAG, MAX_HTTP_HEADER_LINES, HTTP_HEADER_READ_TIMEOUT_MILLIS, "OK");
+            ArrayList<String> http_response_header_lines = read_is_get_lines_until(m_sock_is, HTTP_RESPONSE_HEADER_END_FLAG, MAX_HTTP_HEADER_LINES, HTTP_HEADER_READ_TIMEOUT_MILLIS);
             if (http_response_header_lines.size() ==  0) {
                 throw new Exception("failed to read http response header...");
             }
@@ -165,7 +165,7 @@ public class ntrip_conn_mgr {
                 if (!resp_header_first_line.contains(SOURCETABLE_STR))
                     throw new Exception("get_mount_point_list failed as server resp_header_first_line as does not contain: ["+SOURCETABLE_STR+"] - resp_header_first_line: " + resp_header_first_line);
 
-                ArrayList<String> sourcetable_lines = read_is_get_lines_until(m_sock_is, END_SOURCETABLE_STR, MAX_SOURCETABLE_LINES, SOURCETABLE_READ_TIMEOUT_MILLIS, "OK");
+                ArrayList<String> sourcetable_lines = read_is_get_lines_until(m_sock_is, END_SOURCETABLE_STR, MAX_SOURCETABLE_LINES, SOURCETABLE_READ_TIMEOUT_MILLIS);
                 Collections.sort(sourcetable_lines);
                 return sourcetable_lines;
 
@@ -253,7 +253,7 @@ public class ntrip_conn_mgr {
         return request_msg;
     }
 
-    public static ArrayList<String> read_is_get_lines_until(InputStream is, String end_flag, int max_lines_throw_thereafter, int timeout_millis, String alt0_end_resp_line_with_flag) throws Exception
+    public static ArrayList<String> read_is_get_lines_until(InputStream is, String end_flag, int max_lines_throw_thereafter, int timeout_millis) throws Exception
     {
         byte[] tmp_read_buf = new byte[inputstream_to_queue_reader_thread.MAX_READ_BUF_SIZE];
         ArrayList<String> lines = new ArrayList<String>();
@@ -262,7 +262,7 @@ public class ntrip_conn_mgr {
             String read_line = new String(resp_line_bytes,  StandardCharsets.UTF_8);
             Log.d(TAG, "read_is_get_lines_until: "+read_line+" end_flag: "+end_flag);
 
-            if ((alt0_end_resp_line_with_flag != null && read_line.contains(alt0_end_resp_line_with_flag))) {
+            if (read_line.trim().endsWith(HTTP_200_OK_STR)) {
                 lines.add(read_line);
                 break;
             }
