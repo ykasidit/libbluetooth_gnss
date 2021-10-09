@@ -27,13 +27,12 @@ public class test_nmea_parse {
     public void test() throws Exception {
 
         SentenceFactory sf = SentenceFactory.getInstance();
-        GGASentence gga = (GGASentence) sf.createParser(TalkerId.GN, "GGA");
-        Position position = new Position(15.223850, 104.857898, 0.3); //15.223850, 104.857898
-        gga.setPosition(position);
-
-        String example_nmea_gga = gga.toSentence();
-        System.out.println("gga sentence: "+example_nmea_gga);
-
+        String example_nmea_gga = "$GNGGA,045115.00,0000.000,N,00000.000,E,1,12,0.60,3.0,M,-13.0,M,,*6F";
+        System.out.println("gga sentence: "+example_nmea_gga);        ;
+        GGASentence gga = (GGASentence) sf.createParser(example_nmea_gga);
+        gga.setPosition(new Position(0, 0));
+        gga.setAltitude(3);
+        System.out.println("gga.toString():"+ gga.toString());
         //the strings below are not collected from same device/time so the will not match logcally like upx n sats used wont match gsa etc...
         //the strings below hold some originally ubx messages but since they are in java strings now THEY ARE NOT CORRECT UBX ANYMORE see test_java_strings_must_not_be_used_to_store_binary_data.java unittest - we leave them here just to auto test filtering out by the parser func but they cannot be used to test ubx pkt parsing
         String[] nmeas = {
@@ -140,13 +139,12 @@ public class test_nmea_parse {
 
         System.out.println("UBX_POSITION_numSvs: "+params.get("UBX_POSITION_numSvs"));
         assertTrue(26 == Integer.parseInt((String) params.get("UBX_POSITION_numSvs")));
-
-        assertTrue(params.get("GN_lat").toString().startsWith("15.2"));
-        assertTrue(params.get("GN_lat_str").toString().startsWith("15.2"));
-        assertTrue(params.get("GN_lon").toString().startsWith("104.8"));
-
-
-
-
+        String[] plist = new String[] {"lat", "lon", "gga_alt", "gga_alt_units", "geoidal_height", "geoidal_height_units"};
+        for (String pi : plist) {
+            System.out.println(pi+": "+params.get("GN_"+pi));
+        }
+        assertTrue(params.get("GN_lat").toString().startsWith("0."));
+        assertTrue(params.get("GN_lat_str").toString().startsWith("0."));
+        assertTrue(params.get("GN_lon").toString().startsWith("0."));
     }
 }

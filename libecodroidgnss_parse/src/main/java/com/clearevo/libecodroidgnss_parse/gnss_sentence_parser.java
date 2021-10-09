@@ -181,7 +181,42 @@ public class gnss_sentence_parser {
                     }
 
                     try {
+                        //Gets the position altitude from mean sea level - Altitude value in meters - ref https://ktuukkan.github.io/marine-api/0.8.0/javadoc/index.html?net/sf/marineapi/nmea/sentence/GGASentence.html
                         put_param(talker_id, "alt", pos.getAltitude());
+                    } catch (Exception pe) {
+                        Log.d(TAG, "parse/put gga nmea: [" + nmea + "] got exception: " + Log.getStackTraceString(pe));
+                    }
+
+                    try {
+                        //Get antenna altitude above mean sea level.
+                        put_param(talker_id, "gga_alt", gga.getAltitude());
+                    } catch (Exception pe) {
+                        Log.d(TAG, "parse/put gga nmea: [" + nmea + "] got exception: " + Log.getStackTraceString(pe));
+                    }
+                    try {
+                        put_param(talker_id, "gga_alt_units", gga.getAltitudeUnits().toString());
+                    } catch (Exception pe) {
+                        Log.d(TAG, "parse/put gga nmea: [" + nmea + "] got exception: " + Log.getStackTraceString(pe));
+                    }
+                    try {
+                        //Get height/separation of geoid above WGS84 ellipsoid, i.e. difference between WGS-84 earth ellipsoid and mean sea level.
+                        put_param(talker_id, "geoidal_height", gga.getGeoidalHeight());
+                    } catch (Exception pe) {
+                        Log.d(TAG, "parse/put gga nmea: [" + nmea + "] got exception: " + Log.getStackTraceString(pe));
+                    }
+                    try {
+                        put_param(talker_id, "geoidal_height_units", gga.getGeoidalHeightUnits().toString());
+                    } catch (Exception pe) {
+                        Log.d(TAG, "parse/put gga nmea: [" + nmea + "] got exception: " + Log.getStackTraceString(pe));
+                    }
+
+                    try {
+                        put_param(talker_id, "gga_alt", gga.getAltitude());
+                    } catch (Exception pe) {
+                        Log.d(TAG, "parse/put gga nmea: [" + nmea + "] got exception: " + Log.getStackTraceString(pe));
+                    }
+                    try {
+                        put_param(talker_id, "gga_alt_units", gga.getAltitudeUnits().toString());
                     } catch (Exception pe) {
                         Log.d(TAG, "parse/put gga nmea: [" + nmea + "] got exception: " + Log.getStackTraceString(pe));
                     }
