@@ -238,7 +238,7 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
 
             double lat = loc.lat, lon = loc.lon, alt = 0.0, hdop = 0.0, speed = 0.0, bearing = 0.0/0.0;
             double accuracy = hdop * get_connected_device_CEP();
-            setMock(lat, lon, alt, (float) accuracy, (float) bearing, (float) speed);
+            setMock(lat, lon, alt, (float) accuracy, (float) bearing, (float) speed, false);
 
             String talker = "GN";
             m_gnss_parser.put_param(talker, "location_from_talker", talker);
@@ -951,7 +951,7 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
 
     File bt_gnss_test_debug_mock_location_1_1_mode_flag = new File("/sdcard/bt_gnss_test_debug_mock_location_1_1_mode_flag");
 
-    private void setMock(double latitude, double longitude, double altitude, float accuracy, float bearing, float speed) {
+    private void setMock(double latitude, double longitude, double altitude, float accuracy, float bearing, float speed, boolean alt_is_elipsoidal) {
 
         try {
             if (bt_gnss_test_debug_mock_location_1_1_mode_flag.isFile()) {
@@ -1122,7 +1122,16 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
                     if (new_ts != last_set_mock_location_ts) {
                         lat = (double) params_map.get(talker+"_lat");
                         lon = (double) params_map.get(talker+"_lon");
-                        alt = (double) params_map.get(talker+"_alt");
+                        String ellips_height_key = talker+"_ellipsoidal_height";
+                        boolean alt_is_ellipsoidal = false;
+                        if (params_map.containsKey(ellips_height_key)) {
+                            alt_is_ellipsoidal = true;
+                            alt = (double) params_map.get(ellips_height_key);
+                            Log.d(TAG, "ellips_height_key valid");
+                        } else {
+                            alt = (double) params_map.get(talker+"_alt");
+                            Log.d(TAG, "ellips_height_key not valid");
+                        }
                         hdop = (double) params_map.get(talker+"_hdop");
                         speed = (double) params_map.get(talker+"_speed"); //Speed in knots (nautical miles per hour).
                         speed = speed * 0.514444; //convert to m/s
@@ -1147,13 +1156,13 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
 
                             accuracy = hdop * get_connected_device_CEP();
                         }
-                        setMock(lat, lon, alt, (float) accuracy, (float) bearing, (float) speed);
+                        setMock(lat, lon, alt, (float) accuracy, (float) bearing, (float) speed, alt_is_ellipsoidal);
                         m_gnss_parser.put_param("", "hdop", hdop);
                         m_gnss_parser.put_param("", "location_from_talker", talker);
-
                         m_gnss_parser.put_param("", "lat", lat);
                         m_gnss_parser.put_param("", "lon", lon);
                         m_gnss_parser.put_param("", "alt", alt);
+                        m_gnss_parser.put_param("", "alt_type", alt_is_ellipsoidal?"ellipsoidal":"orthometric");
                         m_gnss_parser.put_param("", "accuracy", accuracy);
                         m_gnss_parser.put_param("", "mock_location_set_ts", System.currentTimeMillis());
                         if (log_file_uri != null) {

@@ -13,6 +13,7 @@ import net.sf.marineapi.nmea.sentence.TalkerId;
 import net.sf.marineapi.nmea.sentence.VTGSentence;
 import net.sf.marineapi.nmea.util.Position;
 import net.sf.marineapi.nmea.util.SatelliteInfo;
+import net.sf.marineapi.nmea.util.Units;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -204,8 +205,19 @@ public class gnss_sentence_parser {
                     } catch (Exception pe) {
                         Log.d(TAG, "parse/put gga nmea: [" + nmea + "] got exception: " + Log.getStackTraceString(pe));
                     }
+
                     try {
                         put_param(talker_id, "geoidal_height_units", gga.getGeoidalHeightUnits().toString());
+                    } catch (Exception pe) {
+                        Log.d(TAG, "parse/put gga nmea: [" + nmea + "] got exception: " + Log.getStackTraceString(pe));
+                    }
+
+                    try {
+                        Units alt_units = gga.getGeoidalHeightUnits();
+                        Units geoidal_height_units = gga.getGeoidalHeightUnits();
+                        if (alt_units == geoidal_height_units) {
+                            put_param(talker_id, "ellipsoidal_height", gga.getAltitude() + gga.getGeoidalHeight());
+                        }
                     } catch (Exception pe) {
                         Log.d(TAG, "parse/put gga nmea: [" + nmea + "] got exception: " + Log.getStackTraceString(pe));
                     }

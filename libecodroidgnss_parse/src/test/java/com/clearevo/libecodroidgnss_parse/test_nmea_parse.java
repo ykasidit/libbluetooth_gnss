@@ -139,7 +139,7 @@ public class test_nmea_parse {
 
         System.out.println("UBX_POSITION_numSvs: "+params.get("UBX_POSITION_numSvs"));
         assertTrue(26 == Integer.parseInt((String) params.get("UBX_POSITION_numSvs")));
-        String[] plist = new String[] {"lat", "lon", "gga_alt", "gga_alt_units", "geoidal_height", "geoidal_height_units"};
+        String[] plist = new String[] {"lat", "lon", "gga_alt", "gga_alt_units", "geoidal_height", "geoidal_height_units", "ellipsoidal_height"};
         for (String pi : plist) {
             System.out.println(pi+": "+params.get("GN_"+pi));
         }

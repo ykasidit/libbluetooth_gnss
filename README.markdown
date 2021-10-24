@@ -5,6 +5,8 @@ libbluetooth_gnss
 About
 -----
 
+This is the engine part of the app, for the main app please visit: <https://github.com/ykasidit/bluetooth_gnss>
+
 This android-studio project repo contains a few main android library 'modules' which allows Android phones to connect and read/parse GNSS (GPS/GLONASS/Galileo/BeiDou) position data from existing Bluetooth GNSS Receivers like the [EcoDroidGPS Bluetooth GPS Receiver](https://www.clearevo.com/ecodroidgps) - which is the main target device and developed by the same author of this project and also others similar 'nmea-like-messages over RFCOMM' devices like the HOLUX Bluetooth GPS devices, the Garmin GLO, etc.
 
 The main modules are listed below:
