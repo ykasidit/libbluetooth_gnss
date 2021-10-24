@@ -22,6 +22,7 @@ import android.content.Intent;
 import android.location.Criteria;
 import android.net.Uri;
 import android.os.Binder;
+import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.ParcelUuid;
@@ -235,10 +236,10 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
             ecodroidgps_gap_buffer_parser.ecodroidgps_broadcasted_location loc = ecodroidgps_gap_buffer_parser.parse(gap_buffer);
             Log.d(TAG, "ECODROIDGPS_BROADCAST_MODE got broadcast: lat: "+loc.lat+" lon: "+loc.lon+" timestamp: "+loc.timestamp);
 
-
+            int n_sats = 0;
             double lat = loc.lat, lon = loc.lon, alt = 0.0, hdop = 0.0, speed = 0.0, bearing = 0.0/0.0;
             double accuracy = hdop * get_connected_device_CEP();
-            setMock(lat, lon, alt, (float) accuracy, (float) bearing, (float) speed, false);
+            setMock(lat, lon, alt, (float) accuracy, (float) bearing, (float) speed, false, n_sats);
 
             String talker = "GN";
             m_gnss_parser.put_param(talker, "location_from_talker", talker);
@@ -951,7 +952,7 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
 
     File bt_gnss_test_debug_mock_location_1_1_mode_flag = new File("/sdcard/bt_gnss_test_debug_mock_location_1_1_mode_flag");
 
-    private void setMock(double latitude, double longitude, double altitude, float accuracy, float bearing, float speed, boolean alt_is_elipsoidal) {
+    private void setMock(double latitude, double longitude, double altitude, float accuracy, float bearing, float speed, boolean alt_is_elipsoidal, int n_sats) {
 
         try {
             if (bt_gnss_test_debug_mock_location_1_1_mode_flag.isFile()) {
@@ -969,18 +970,22 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
         LocationManager locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
 
         Location newLocation = new Location(LocationManager.GPS_PROVIDER);
+        newLocation.setTime(System.currentTimeMillis());
         newLocation.setLatitude(latitude);
         newLocation.setLongitude(longitude);
         newLocation.setAccuracy(accuracy);
         newLocation.setAltitude(altitude);
-        newLocation.setAccuracy(accuracy);
         if (!Double.isNaN(bearing))
             newLocation.setBearing(bearing);
         else {
             //Log.d(TAG, "bearing is nan so not setting in newlocation");
         }
         newLocation.setSpeed(speed);
-        newLocation.setTime(System.currentTimeMillis());
+        if (n_sats > 0) {
+            Bundle bundle = new Bundle();
+            bundle.putInt("satellites", n_sats);
+            newLocation.setExtras(bundle);
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
             newLocation.setElapsedRealtimeNanos(SystemClock.elapsedRealtimeNanos());
 
@@ -990,6 +995,9 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
                 null,System.currentTimeMillis());
         Log.d(TAG, "setMock lat: "+newLocation.getLatitude());
         Log.d(TAG, "setMock lon: "+newLocation.getLongitude());
+        if (newLocation.getExtras() != null) {
+            Log.d(TAG, "setMock satellites: " + newLocation.getExtras().getInt("satellites"));
+        }
         locationManager.setTestProviderLocation(LocationManager.GPS_PROVIDER, newLocation);
     }
 
@@ -1114,6 +1122,7 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
         Log.d(TAG, "service: on_updated_nmea_params() start");
         //try set_mock
         double lat = 0.0, lon = 0.0, alt = 0.0, hdop = 0.0, speed = 0.0, bearing = 0.0/0.0;
+        int n_sats = 0;
         for (String talker : GGA_MESSAGE_TALKER_TRY_LIST) {
 
             try {
@@ -1131,6 +1140,15 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
                         } else {
                             alt = (double) params_map.get(talker+"_alt");
                             Log.d(TAG, "ellips_height_key not valid");
+                        }
+                        String[] sats_keys = new String[]{"GP_n_sats_used", "GL_n_sats_used", "GA_n_sats_used", "GB_n_sats_used"};
+                        for (String sk : sats_keys) {
+                            if (params_map.containsKey(sk)) {
+                                Object val = params_map.get(sk);
+                                if (val != null && val instanceof Integer) {
+                                    n_sats += (Integer) val;
+                                }
+                            }
                         }
                         hdop = (double) params_map.get(talker+"_hdop");
                         speed = (double) params_map.get(talker+"_speed"); //Speed in knots (nautical miles per hour).
@@ -1156,13 +1174,14 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
 
                             accuracy = hdop * get_connected_device_CEP();
                         }
-                        setMock(lat, lon, alt, (float) accuracy, (float) bearing, (float) speed, alt_is_ellipsoidal);
+                        setMock(lat, lon, alt, (float) accuracy, (float) bearing, (float) speed, alt_is_ellipsoidal, n_sats);
                         m_gnss_parser.put_param("", "hdop", hdop);
                         m_gnss_parser.put_param("", "location_from_talker", talker);
                         m_gnss_parser.put_param("", "lat", lat);
                         m_gnss_parser.put_param("", "lon", lon);
                         m_gnss_parser.put_param("", "alt", alt);
                         m_gnss_parser.put_param("", "alt_type", alt_is_ellipsoidal?"ellipsoidal":"orthometric");
+                        m_gnss_parser.put_param("", "n_sats", n_sats);
                         m_gnss_parser.put_param("", "accuracy", accuracy);
                         m_gnss_parser.put_param("", "mock_location_set_ts", System.currentTimeMillis());
                         if (log_file_uri != null) {
