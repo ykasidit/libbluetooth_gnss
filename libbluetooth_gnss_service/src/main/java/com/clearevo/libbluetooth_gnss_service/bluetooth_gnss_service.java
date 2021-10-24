@@ -19,6 +19,7 @@ import android.bluetooth.le.ScanSettings;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.location.Criteria;
 import android.net.Uri;
 import android.os.Binder;
@@ -153,15 +154,25 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
         return START_REDELIVER_INTENT;
     }
 
+    public static final String log_uri_pref_key = "flutter.pref_log_uri";
     void connect()
     {
+        final SharedPreferences prefs = getApplicationContext().getSharedPreferences("FlutterSharedPreferences", MODE_PRIVATE);
+        String log_uri = prefs.getString(log_uri_pref_key, "");
+        if (!log_uri.isEmpty()) {
+            try {
+                set_log_folder(Uri.parse(log_uri));
+            } catch (Throwable tr) {
+                Log.d(TAG, "set_log_uri exception: "+Log.getStackTraceString(tr));
+            }
+        }
+
         if (m_ble_gap_scan_mode) {
             Log.d(TAG, "onStartCommand pre call start_forground m_ble_gap_scan_mode "+m_ble_gap_scan_mode);
             start_foreground("Scanning GPS broadcasts...", "", "");
             Log.d(TAG, "onStartCommand post call start_forground m_ble_gap_scan_mode "+m_ble_gap_scan_mode);
             handle_ble_gap_scan_enable_changed();
         } else {
-
             if (m_bdaddr == null) {
                 String msg = "bluetooth_gnss_service: startservice: Target Bluetooth device not specifed - cannot start...";
                 Log.d(TAG, msg);
@@ -755,7 +766,6 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
                         DocumentFile dd = DocumentFile.fromTreeUri(getApplicationContext(), log_folder_uri);
                         DocumentFile df = dd.createFile("text/plain", (log_name_sdf.format(new Date()) + "_rx_log.txt"));
                         DocumentFile df_csv = dd.createFile("text/csv", (log_name_sdf.format(new Date()) + "_location_log.csv"));
-
                         log_file_uri = df.getUri();
                         Log.d(TAG, "log_bt_rx: log_fp: " + df.getUri().toString());
                         log_bt_rx_bytes_written = 0;
@@ -763,6 +773,7 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
                         m_log_bt_rx_csv_fos = getApplicationContext().getContentResolver().openOutputStream(df_csv.getUri());
                         m_log_bt_rx_csv_fos.write("time,lat,lon,alt\n".getBytes());
                         m_log_bt_rx_csv_fos.flush();
+                        toast("Logging to: "+log_folder_uri.getPath());
                         Log.d(TAG, "log_bt_rx: m_log_bt_rx_fos ready");
                     }
                     if (m_log_bt_rx_fos != null) {
