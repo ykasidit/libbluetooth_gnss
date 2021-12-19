@@ -157,6 +157,14 @@ public class gnss_sentence_parser {
 
             } else {
 
+                if (nmea.contains("$")) {
+                    int li = nmea.lastIndexOf("$");
+                    int fi = nmea.indexOf("$");
+                    if (fi != li) {
+                        //handle some strings coming like: $GNRMC,1$GPGGA,134...
+                        nmea = nmea.substring(li);
+                    }
+                }
                 Sentence sentence = m_sf.createParser(nmea);
                 ret = nmea; // if control reaches here means that this nmea string is valid
                 String sentence_id = sentence.getSentenceId();

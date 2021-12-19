@@ -1226,7 +1226,7 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
                     }
                 }
             } catch (Exception e) {
-                Log.d(TAG, "bluetooth_gnss_service on_updated_nmea_params exception: "+Log.getStackTraceString(e));
+                Log.d(TAG, "bluetooth_gnss_service on_updated_nmea_params talker: "+talker+" exception: "+Log.getStackTraceString(e));
             }
         }
 
