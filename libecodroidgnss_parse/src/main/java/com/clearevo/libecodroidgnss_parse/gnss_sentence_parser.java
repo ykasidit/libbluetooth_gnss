@@ -2,7 +2,9 @@ package com.clearevo.libecodroidgnss_parse;
 
 import android.util.Log;
 
+
 import net.sf.marineapi.nmea.parser.DataNotAvailableException;
+import net.sf.marineapi.nmea.parser.ParseException;
 import net.sf.marineapi.nmea.parser.SentenceFactory;
 import net.sf.marineapi.nmea.sentence.GGASentence;
 import net.sf.marineapi.nmea.sentence.GSASentence;
@@ -41,12 +43,11 @@ public class gnss_sentence_parser {
     public HashMap<String, Object> getM_parsed_params_hashmap() {
         return m_parsed_params_hashmap;
     }
-
     HashMap<String, Object> m_parsed_params_hashmap = new HashMap<String, Object>();
-
     public gnss_parser_callbacks get_callback() {
         return m_cb;
     }
+    public ArrayList m_gsv_talker_signal_id_list = new ArrayList<Object[]>();
 
     //returns valid parsed nmea or null if parse failed
     public String parse(byte[] read_line_raw_bytes) throws Exception {
@@ -172,12 +173,42 @@ public class gnss_sentence_parser {
                 //sentence type counter
                 String param_key = sentence_id + "_count";
                 String talker_id = sentence.getTalkerId().name(); //sepcifies talker_id like GN for combined, GA for Galileo, GP for GPS
-                inc_param(talker_id, param_key); //talter-to-sentence param
+                inc_param(talker_id, param_key); //talker-to-sentence param
+
+                //handle gsv multi freq signal_id list flush and clear
+                if (!(sentence instanceof GSVSentence) && m_gsv_talker_signal_id_list.size() > 0) {
+                    try {
+                        //System.out.println("handle gsv multi freq signal_id list flush and clear");
+                        HashMap<String, ArrayList<Integer>> talker_to_signal_id_list_map = new HashMap<String, ArrayList<Integer>>();
+                        for (Object o : m_gsv_talker_signal_id_list) {
+                            Object[] oarray = (Object[]) o;
+                            String that_talker = (String) oarray[0];
+                            int signal_id = (Integer) oarray[1];
+                            if (!talker_to_signal_id_list_map.containsKey(that_talker)) {
+                                talker_to_signal_id_list_map.put(that_talker, new ArrayList<Integer>());
+                            }
+                            talker_to_signal_id_list_map.get(that_talker).add(signal_id);
+                        }
+                        for (String that_talker : talker_to_signal_id_list_map.keySet()) {
+                            ArrayList<Integer> signal_ids = talker_to_signal_id_list_map.get(that_talker);
+                            put_param(that_talker, "gsv_signal_id_list", signal_ids);
+                            //count total sats for that that_talker
+                            int nsats = 0;
+                            for (Integer signal_id : signal_ids) {
+                                String key = that_talker+"_"+"n_sats_in_view"+"_signal_id_"+signal_id;
+                                nsats += (Integer) m_parsed_params_hashmap.get(key);
+                            }
+                            put_param(that_talker, "n_sats_in_view", nsats);
+                        }
+                    } catch (Exception e) {
+                        Log.d(TAG, "handle gsv multi freq signal_id list flush and clear exception: "+Log.getStackTraceString(e));
+                    } finally {
+                        m_gsv_talker_signal_id_list.clear();
+                    }
+                }
 
                 /////////////////////// parse and put main params in hashmap
-
                 //System.out.println("got parsed read_line: "+ret);
-
                 if (sentence instanceof GGASentence) {
                     GGASentence gga = (GGASentence) sentence;
                     Position pos = gga.getPosition();
@@ -348,36 +379,64 @@ public class gnss_sentence_parser {
                                 tmp_param_key_prefix + "sats_in_view_id_list",
                                 tmp_param_key_prefix + "sats_in_view_snr_list",
                                 tmp_param_key_prefix + "sats_in_view_elevation_list",
-                                tmp_param_key_prefix + "sats_in_view_azimuth_list"
+                                tmp_param_key_prefix + "sats_in_view_azimuth_list",
+                                tmp_param_key_prefix + "sats_in_view_signal_id_list"
                         };
                         final int tmp_list_keys_to_flush_offset_id = 0;
                         final int tmp_list_keys_to_flush_offset_noise = 1;
                         final int tmp_list_keys_to_flush_offset_elevation = 2;
                         final int tmp_list_keys_to_flush_offset_azimuth = 3;
+                        final int tmp_list_keys_to_flush_offset_signal_id = 4;
+
+                        int signal_id = -1;
+                        try {
+                            int n_fields = gsv.getFieldCount();
+                            boolean has_signal_id = false;
+                            if ((n_fields - 7) % 4 == 1) { //ref: gsv number of fields = 7 + [0..4]*4 so if mod 4 == 1 means has extra field and that is signal_id identifying the freq
+                                has_signal_id = true;
+                            }
+                            String signal_id_str = null;
+                            String gsv_str = gsv.toString();
+                            if (has_signal_id && gsv_str != null && gsv_str.contains(",")) {
+                                String[] parts = gsv_str.split(",");
+                                if (parts.length > 0) {
+                                    String last_part = parts[parts.length - 1];
+                                    if (last_part.contains("*")) {
+                                        String[] lp_parts = last_part.split("\\*");
+                                        if (lp_parts.length > 0) {
+                                            signal_id_str = lp_parts[0];
+                                            signal_id = Integer.parseInt(signal_id_str.trim());
+                                        }
+                                    }
+                                }
+                            }
+                            System.out.println("gsv n_fields "+n_fields+" has_signal_id "+has_signal_id+" signal_id_str "+signal_id_str+" signal_id "+signal_id);
+                        } catch (Exception e) {
+                            Log.d(TAG, "extract signal_id from gsv exception: "+Log.getStackTraceString(e));
+                        }
 
                         if (gsv.isFirst()) {
-
                             m_parsed_params_hashmap.put(tmp_list_keys_to_flush[tmp_list_keys_to_flush_offset_id], new ArrayList<String>());
                             m_parsed_params_hashmap.put(tmp_list_keys_to_flush[tmp_list_keys_to_flush_offset_noise], new ArrayList<Integer>());
                             m_parsed_params_hashmap.put(tmp_list_keys_to_flush[tmp_list_keys_to_flush_offset_elevation], new ArrayList<Integer>());
                             m_parsed_params_hashmap.put(tmp_list_keys_to_flush[tmp_list_keys_to_flush_offset_azimuth], new ArrayList<Integer>());
+                            m_parsed_params_hashmap.put(tmp_list_keys_to_flush[tmp_list_keys_to_flush_offset_signal_id], new ArrayList<Integer>());
                         }
 
-
                         //Log.d(TAG, "gsv talker " + talker_id + " page " + gsv.getSentenceIndex() + " n sats in view " + gsv.getSatelliteCount() + " n sat info: " + gsv.getSatelliteInfo().size());
-
                         for (SatelliteInfo si : gsv.getSatelliteInfo()) {
-
                             ((List<String>) m_parsed_params_hashmap.get(tmp_list_keys_to_flush[tmp_list_keys_to_flush_offset_id])).add(si.getId());
                             ((List<Integer>) m_parsed_params_hashmap.get(tmp_list_keys_to_flush[tmp_list_keys_to_flush_offset_noise])).add(si.getNoise());
                             ((List<Integer>) m_parsed_params_hashmap.get(tmp_list_keys_to_flush[tmp_list_keys_to_flush_offset_elevation])).add(si.getElevation());
                             ((List<Integer>) m_parsed_params_hashmap.get(tmp_list_keys_to_flush[tmp_list_keys_to_flush_offset_azimuth])).add(si.getAzimuth());
+                            ((List<Integer>) m_parsed_params_hashmap.get(tmp_list_keys_to_flush[tmp_list_keys_to_flush_offset_signal_id])).add(signal_id);
                         }
 
                         if (gsv.isLast()) {
-                            put_param(talker_id, "n_sats_in_view", gsv.getSatelliteCount());
+                            m_gsv_talker_signal_id_list.add(new Object[] {talker_id, signal_id}); //will put_param and clear list on next non-gsv msg
+                            put_param(talker_id, "n_sats_in_view"+"_signal_id_"+signal_id, gsv.getSatelliteCount());
                             for (String tmp_key : tmp_list_keys_to_flush) {
-                                put_param(talker_id, tmp_key.replace(tmp_param_key_prefix, ""), m_parsed_params_hashmap.get(tmp_key));
+                                put_param(talker_id, tmp_key.replace(tmp_param_key_prefix, "")+"_signal_id_"+signal_id, m_parsed_params_hashmap.get(tmp_key));
                             }
                         }
 
