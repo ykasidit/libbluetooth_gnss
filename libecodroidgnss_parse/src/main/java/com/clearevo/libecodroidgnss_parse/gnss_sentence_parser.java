@@ -20,7 +20,9 @@ import net.sf.marineapi.nmea.util.Units;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import static com.clearevo.libecodroidgnss_parse.ubx_parser.ubx_parse_get_n_bytes_consumed;
 
@@ -193,12 +195,12 @@ public class gnss_sentence_parser {
                             ArrayList<Integer> signal_ids = talker_to_signal_id_list_map.get(that_talker);
                             put_param(that_talker, "gsv_signal_id_list", signal_ids);
                             //count total sats for that that_talker
-                            int nsats = 0;
+                            Set<Integer> that_talker_sats_in_view_unique_id_list_all_signals = new HashSet<Integer>();
                             for (Integer signal_id : signal_ids) {
-                                String key = that_talker+"_"+"n_sats_in_view"+"_signal_id_"+signal_id;
-                                nsats += (Integer) m_parsed_params_hashmap.get(key);
+                                String key = that_talker+"_"+"sats_in_view_id_list"+"_signal_id_"+signal_id;
+                                that_talker_sats_in_view_unique_id_list_all_signals.addAll((ArrayList<Integer>) m_parsed_params_hashmap.get(key));
                             }
-                            put_param(that_talker, "n_sats_in_view", nsats);
+                            put_param(that_talker, "n_sats_in_view", that_talker_sats_in_view_unique_id_list_all_signals.size());
                         }
                     } catch (Exception e) {
                         Log.d(TAG, "handle gsv multi freq signal_id list flush and clear exception: "+Log.getStackTraceString(e));
