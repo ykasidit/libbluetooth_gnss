@@ -26,6 +26,8 @@ Special thanks
 --------------
 
 - Special thanks to 'Geoffrey Peck' from Australia for all his tests, observations and suggestions on Galileo support for the 'EcoDroidGPS GNSS Receiver' which led to this project, and also providing example sentence logs where RMC sentence lines got mixed with UBX messages - this is used in the unit-tests of this project to handle and still make use of lines that got binary messages mixed into the start of the same line.
+- Thanks to Geoffrey Peck from Australia for his tests, observations and suggestions.
+- Thanks to Peter Mousley from Australia for his expert advice, tests, code review and guidance.
 
 
 Authors
