@@ -1165,7 +1165,12 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
                         speed = (double) params_map.get(talker+"_speed"); //Speed in knots (nautical miles per hour).
                         speed = speed * 0.514444; //convert to m/s
                         try {
-                            Object course = params_map.get(talker+"_true_course");
+                            Object course = null;
+                            if (params_map.containsKey(talker+"_true_course")) {  // value from VTG
+                                course = params_map.get(talker+"_true_course");
+                            } else if (params_map.containsKey(talker+"_course")) {  // value from RMC (RMC course = VTG true course)
+                                course = params_map.get(talker+"_course");
+                            }
                             Log.d(TAG, "course: "+course);
                             if (course != null) {
                                 bearing = (double) course;
@@ -1182,7 +1187,6 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
 
                         //if not ubx or ubx conv failed...
                         if (accuracy == -1.0) {
-
                             accuracy = hdop * get_connected_device_CEP();
                         }
                         setMock(lat, lon, alt, (float) accuracy, (float) bearing, (float) speed, alt_is_ellipsoidal, n_sats);
@@ -1192,6 +1196,8 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
                         m_gnss_parser.put_param("", "lon", lon);
                         m_gnss_parser.put_param("", "alt", alt);
                         m_gnss_parser.put_param("", "alt_type", alt_is_ellipsoidal?"ellipsoidal":"orthometric");
+                        if (!Double.isNaN(bearing))
+                            m_gnss_parser.put_param("", "course", bearing);
                         m_gnss_parser.put_param("", "n_sats", n_sats);
                         m_gnss_parser.put_param("", "accuracy", accuracy);
                         m_gnss_parser.put_param("", "mock_location_set_ts", System.currentTimeMillis());
