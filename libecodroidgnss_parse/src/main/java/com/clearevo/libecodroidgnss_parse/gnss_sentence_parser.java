@@ -37,6 +37,7 @@ public class gnss_sentence_parser {
             "$"+ TalkerId.GL, //GLONASS
             "$"+ TalkerId.GA, //Galileo
             "$"+ TalkerId.GB, //BeiDou
+            "$"+ TalkerId.GQ, //QZSS
             "$PUBX",
     };
     gnss_parser_callbacks m_cb;
@@ -599,6 +600,8 @@ public class gnss_sentence_parser {
                 return TalkerId.GA.toString();
             case 4:
                 return TalkerId.GB.toString();
+            case 5:
+                return TalkerId.GQ.toString();
         }
         return null;
     }

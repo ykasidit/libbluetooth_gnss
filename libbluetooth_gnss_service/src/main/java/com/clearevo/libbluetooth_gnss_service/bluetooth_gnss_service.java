@@ -1114,7 +1114,8 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
             "GA",
             "GB",
             "GP",
-            "GL"
+            "GL",
+            "GQ"
     };
 
     double DEFAULT_CEP = 4.0;
@@ -1152,7 +1153,7 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
                             alt = (double) params_map.get(talker+"_alt");
                             Log.d(TAG, "ellips_height_key not valid");
                         }
-                        String[] sats_keys = new String[]{"GP_n_sats_used", "GL_n_sats_used", "GA_n_sats_used", "GB_n_sats_used"};
+                        String[] sats_keys = new String[]{"GP_n_sats_used", "GL_n_sats_used", "GA_n_sats_used", "GB_n_sats_used", "GQ_n_sats_used"};
                         for (String sk : sats_keys) {
                             if (params_map.containsKey(sk)) {
                                 Object val = params_map.get(sk);
