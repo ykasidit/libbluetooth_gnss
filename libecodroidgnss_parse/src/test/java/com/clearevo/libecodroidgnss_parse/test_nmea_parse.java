@@ -122,7 +122,7 @@ public class test_nmea_parse {
         System.out.println("GP_n_sats_in_view: "+params.get("GP_n_sats_in_view"));
         System.out.println("GP_n_sats_used: "+params.get("GP_n_sats_used"));
         assertTrue(11 == (int) params.get("GP_n_sats_used"));
-        assertTrue(24 == (int) params.get("GP_n_sats_in_view"));
+        assertTrue(12 == (int) params.get("GP_n_sats_in_view"));
         assertTrue(12 == ((List)params.get("GP_sats_in_view_snr_list_signal_id_1")).size());
 
         System.out.println("GL_n_sats_used: "+params.get("GL_n_sats_used"));
@@ -134,7 +134,7 @@ public class test_nmea_parse {
         System.out.println("GB_n_sats_in_view: "+params.get("GB_n_sats_in_view"));
         System.out.println("GB_n_sats_used: "+params.get("GB_n_sats_used"));
         assertTrue(9 == (int) params.get("GB_n_sats_used"));
-        assertTrue(36 == (int) params.get("GB_n_sats_in_view"));
+        assertTrue(18 == (int) params.get("GB_n_sats_in_view"));
         assertTrue(18 == ((List)params.get("GB_sats_in_view_snr_list_signal_id_1")).size());
 
         System.out.println("UBX_POSITION_numSvs: "+params.get("UBX_POSITION_numSvs"));
