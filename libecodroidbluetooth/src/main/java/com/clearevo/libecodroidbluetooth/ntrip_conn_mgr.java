@@ -23,7 +23,7 @@ public class ntrip_conn_mgr {
     static final int HTTP_HEADER_READ_TIMEOUT_MILLIS = 10*1000;
     static final int SOURCETABLE_READ_TIMEOUT_MILLIS = 10*1000;
 
-    static final String SOURCETABLE_STR = "SOURCETABLE 200 OK";
+    static final String SOURCETABLE_STR = " 200 OK";
     static final String END_SOURCETABLE_STR = "ENDSOURCETABLE";
     static final String ICY_STR = "ICY 200 OK";
     static final String HTTP_RESPONSE_HEADER_END_FLAG = "\r\n"; //CRLF on its own line signals end of header
@@ -163,7 +163,7 @@ public class ntrip_conn_mgr {
 
                 //read sourcetable and return here in this if block
                 if (!resp_header_first_line.contains(SOURCETABLE_STR))
-                    throw new Exception("get_mount_point_list failed as server resp_header_first_line as does not contain: ["+SOURCETABLE_STR+"] - resp_header_first_line: " + resp_header_first_line);
+                    throw new Exception("get_mount_point_list failed as server resp_header_first_line: ["+resp_header_first_line+"] does not contain: ["+SOURCETABLE_STR+"] - resp_header_first_line: " + resp_header_first_line);
 
                 ArrayList<String> sourcetable_lines = read_is_get_lines_until(m_sock_is, END_SOURCETABLE_STR, MAX_SOURCETABLE_LINES, SOURCETABLE_READ_TIMEOUT_MILLIS);
                 Collections.sort(sourcetable_lines);

@@ -54,7 +54,7 @@ public class test_ntrip_conn_mgr implements ntrip_conn_callbacks{
         //make sure you write /etc/test_ntrip_conn_mgr.properties in a format like https://www.mkyong.com/java/java-properties-file-examples/
 
         boolean no_ntrip_cred = false;
-        try (InputStream input = new FileInputStream("/etc/test_ntrip_conn_mgr.properties")) {
+        try (InputStream input = new FileInputStream("/etc/libbluetooth_gnss_test/test_ntrip_conn_mgr.properties")) {
 
             Properties prop = new Properties();
             prop.load(input);
