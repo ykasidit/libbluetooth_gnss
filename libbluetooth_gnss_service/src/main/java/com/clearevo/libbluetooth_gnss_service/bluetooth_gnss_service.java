@@ -1049,7 +1049,7 @@ public class bluetooth_gnss_service extends Service implements rfcomm_conn_callb
                         /*boolean hasMonetaryCost*/ false,
                         /*boolean supportsAltitude*/ true,
                         /*boolean supportsSpeed*/ true,
-                        /*boolean supportsBearing */ false,
+                        /*boolean supportsBearing */ true,
                         Criteria.POWER_LOW,
                         Criteria.ACCURACY_MEDIUM);
                 locationManager.setTestProviderEnabled(LocationManager.GPS_PROVIDER, true);
